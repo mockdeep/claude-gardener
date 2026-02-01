@@ -20,4 +20,4 @@ RUN bundle config set --local without 'development test' && \
 
 COPY . .
 
-ENTRYPOINT ["ruby", "lib/claude_gardener.rb"]
+ENTRYPOINT ["ruby", "/action/lib/claude_gardener.rb"]
