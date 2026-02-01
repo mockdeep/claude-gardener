@@ -1,24 +1,20 @@
-# Claude Gardener 🌱
+# Claude Gardener
 
-A GitHub Action that enables Claude to continuously make small improvements to your codebase. Claude Gardener creates focused PRs, responds to review feedback, and learns from the process.
+A GitHub Action that enables Claude to continuously make small improvements to your codebase. Claude Gardener selects tasks, makes focused changes, and creates PRs automatically.
 
 ## How It Works
 
-Claude Gardener operates in a continuous improvement loop:
-
-1. **Start**: Manual trigger or scheduled run
-2. **Select**: Pick the highest priority task with available capacity
-3. **Execute**: Claude makes focused changes and creates a PR
-4. **Review**: You review and provide feedback
-5. **Iterate**: Claude addresses feedback (up to configured limit)
-6. **Merge**: When satisfied, merge the PR
-7. **Repeat**: After merge, Claude starts on the next task
+1. **Trigger**: Run manually from the Actions tab (or on a schedule)
+2. **Select**: Picks the highest priority task with available capacity
+3. **Execute**: Claude makes focused changes to your code
+4. **PR**: Creates a labeled pull request for review
+5. **Repeat**: After merge, run again for the next improvement
 
 ## Quick Start
 
-### 1. Create the workflow file
+### 1. Create the workflow
 
-Add `.github/workflows/claude-gardener.yml` to your repository:
+Add `.github/workflows/claude-gardener.yml`:
 
 ```yaml
 name: Claude Gardener
@@ -40,24 +36,48 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write
 
 jobs:
   garden:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Run Claude Gardener
         uses: mockdeep/claude-gardener@main
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_oauth_token: ${{ secrets.CLAUDE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           category: ${{ github.event.inputs.category || 'auto' }}
 ```
 
-### 2. Add configuration (optional)
+### 2. Add authentication
+
+**Option A: OAuth Token (for Max/Pro subscribers)**
+
+```bash
+# Get your token
+claude auth token
+
+# Add as secret
+gh secret set CLAUDE_OAUTH_TOKEN
+```
+
+**Option B: API Key (pay-per-use)**
+
+```bash
+gh secret set ANTHROPIC_API_KEY
+```
+
+Then use `anthropic_api_key` instead of `claude_oauth_token` in the workflow.
+
+### 3. Enable PR creation
+
+Go to **Settings → Actions → General → Workflow permissions** and check:
+- "Allow GitHub Actions to create and approve pull requests"
+
+### 4. Add configuration (optional)
 
 Create `claude-gardener.yml` in your repository root:
 
@@ -72,10 +92,6 @@ priorities:
     max_prs: 3
     enabled: true
 
-  - category: security_fixes
-    max_prs: 2
-    enabled: true
-
   - category: linter_fixes
     max_prs: 5
     enabled: true
@@ -85,7 +101,6 @@ priorities:
     enabled: true
 
 guardrails:
-  max_iterations_per_pr: 5
   max_files_per_pr: 10
   require_tests: true
 
@@ -94,31 +109,22 @@ excluded_paths:
   - "node_modules/**"
 ```
 
-### 3. Add your Anthropic API key
+### 5. Run it
 
-Add `ANTHROPIC_API_KEY` to your repository secrets.
-
-### 4. Start gardening
-
-Go to Actions → Claude Gardener → Run workflow
+Go to **Actions → Claude Gardener → Run workflow**
 
 ## Task Categories
 
-### test_coverage
-Identifies code with missing or low test coverage and adds focused, behavior-driven tests.
-
-### security_fixes
-Scans for security vulnerabilities (OWASP Top 10, hardcoded secrets, etc.) and fixes them.
-
-### linter_fixes
-Runs your configured linter and fixes violations systematically.
-
-### code_improvements
-Makes small improvements to code readability, performance, and maintainability.
+| Category | Description |
+|----------|-------------|
+| `test_coverage` | Adds tests for code with missing coverage |
+| `security_fixes` | Fixes security vulnerabilities (OWASP Top 10, secrets, etc.) |
+| `linter_fixes` | Fixes linter violations systematically |
+| `code_improvements` | Small improvements to readability and maintainability |
 
 ### Custom Tasks
 
-You can define custom refactoring tasks:
+Define your own refactoring tasks:
 
 ```yaml
 priorities:
@@ -138,29 +144,48 @@ priorities:
 | `priorities[].category` | - | Task category name |
 | `priorities[].max_prs` | 3 | Max open PRs for this category |
 | `priorities[].enabled` | true | Whether this category is active |
-| `priorities[].tasks` | [] | Custom tasks for user_transitions |
-| `guardrails.max_iterations_per_pr` | 5 | Review cycles before escalating |
+| `priorities[].tasks` | [] | Custom task descriptions |
 | `guardrails.max_files_per_pr` | 10 | Max files changed per PR |
 | `guardrails.require_tests` | true | Require test coverage |
 | `labels.base` | "claude-gardener" | Base label for PRs |
-| `labels.categories` | true | Add category-specific labels |
 | `excluded_paths` | [] | Glob patterns to exclude |
 
 ## How Coordination Works
 
 Claude Gardener uses PR-based locking to prevent conflicts:
 
-- Before starting work, it checks which files are touched by open gardener PRs
-- It avoids modifying those files until the PRs are merged or closed
-- Multiple gardener instances can work on different areas simultaneously
+- Checks which files are touched by open gardener PRs
+- Avoids modifying those files until PRs are merged/closed
+- Multiple runs can work on different areas simultaneously
 
-## Learning
+## Inputs
 
-Claude Gardener learns from feedback:
+| Input | Required | Description |
+|-------|----------|-------------|
+| `anthropic_api_key` | No* | Anthropic API key (pay-per-use) |
+| `claude_oauth_token` | No* | OAuth token for Max/Pro subscribers |
+| `github_token` | Yes | GitHub token for PR operations |
+| `config_path` | No | Path to config file (default: `claude-gardener.yml`) |
+| `category` | No | Specific category to work on (default: `auto`) |
 
-- If it discovers project conventions, it updates `CLAUDE.md`
-- Repeated patterns may become skills in `.claude/skills/`
-- Future PRs benefit from this accumulated knowledge
+*One of `anthropic_api_key` or `claude_oauth_token` is required.
+
+## Outputs
+
+| Output | Description |
+|--------|-------------|
+| `pr_number` | The PR number created (if any) |
+| `pr_url` | The PR URL created (if any) |
+| `skipped` | Whether the run was skipped (at capacity or no work) |
+
+## Troubleshooting
+
+| Error | Solution |
+|-------|----------|
+| "Credit balance too low" | Add API credits or use OAuth token |
+| "Resource not accessible by integration" | Add required permissions to workflow |
+| "id-token: write" error | Add `id-token: write` to permissions |
+| "Not permitted to create PRs" | Enable in Settings → Actions → General |
 
 ## License
 
