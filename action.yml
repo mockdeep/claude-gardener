@@ -92,6 +92,4 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         CATEGORY: ${{ steps.select-task.outputs.category }}
         BASE_LABEL: ${{ steps.select-task.outputs.base_label }}
-      run: |
-        cd ${{ github.action_path }}
-        ruby lib/create_pr.rb
+      run: ruby ${{ github.action_path }}/lib/create_pr.rb
