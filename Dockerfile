@@ -4,10 +4,12 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     ca-certificates \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code CLI
-RUN curl -fsSL https://claude.ai/install.sh | sh
+# Install Claude Code CLI via npm
+RUN npm install -g @anthropic-ai/claude-code
 
 WORKDIR /action
 COPY Gemfile Gemfile.lock ./
