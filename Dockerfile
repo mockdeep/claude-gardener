@@ -6,6 +6,8 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     nodejs \
     npm \
+    build-essential \
+    libyaml-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code CLI via npm
@@ -13,7 +15,8 @@ RUN npm install -g @anthropic-ai/claude-code
 
 WORKDIR /action
 COPY Gemfile Gemfile.lock ./
-RUN bundle install --jobs 4 --retry 3
+RUN bundle config set --local without 'development test' && \
+    bundle install --jobs 4 --retry 3
 
 COPY . .
 
