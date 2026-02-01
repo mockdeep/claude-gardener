@@ -37,31 +37,23 @@ on:
           - linter_fixes
           - code_improvements
 
-  pull_request_review:
-    types: [submitted]
-
-  push:
-    branches: [main]
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   garden:
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request_review' &&
-       contains(github.event.pull_request.labels.*.name, 'claude-gardener')) ||
-      (github.event_name == 'push' &&
-       contains(github.event.head_commit.message, '[gardener]'))
+    if: github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Run Claude Gardener
-        uses: mockdeep/claude-gardener@v1
+        uses: mockdeep/claude-gardener@main
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          event_type: ${{ github.event_name }}
           category: ${{ github.event.inputs.category || 'auto' }}
 ```
 
@@ -161,19 +153,6 @@ Claude Gardener uses PR-based locking to prevent conflicts:
 - Before starting work, it checks which files are touched by open gardener PRs
 - It avoids modifying those files until the PRs are merged or closed
 - Multiple gardener instances can work on different areas simultaneously
-
-## Escalation
-
-When a PR reaches `max_iterations_per_pr` review cycles without being approved:
-
-1. The `needs-human` label is added
-2. A comment explains the situation
-3. Claude stops working on that PR
-
-You can then:
-- Provide more specific guidance
-- Make changes yourself
-- Close the PR if the approach isn't working
 
 ## Learning
 

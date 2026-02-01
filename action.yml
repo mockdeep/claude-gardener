@@ -16,25 +16,77 @@ inputs:
   config_path:
     description: 'Path to claude-gardener.yml config'
     default: 'claude-gardener.yml'
-  event_type:
-    description: 'The GitHub event that triggered this run'
-    required: true
   category:
-    description: 'Specific category to work on (optional, for workflow_dispatch)'
+    description: 'Specific category to work on (optional)'
     required: false
     default: 'auto'
 
+outputs:
+  pr_number:
+    description: 'The PR number created, if any'
+    value: ${{ steps.create-pr.outputs.pr_number }}
+  pr_url:
+    description: 'The PR URL created, if any'
+    value: ${{ steps.create-pr.outputs.pr_url }}
+  skipped:
+    description: 'Whether the run was skipped (at capacity or no work)'
+    value: ${{ steps.select-task.outputs.skipped }}
+
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
-  args:
-    - ${{ inputs.event_type }}
-    - ${{ inputs.config_path }}
-    - ${{ inputs.category }}
-  env:
-    ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
-    GITHUB_TOKEN: ${{ inputs.github_token }}
-    GITHUB_REPOSITORY: ${{ github.repository }}
-    GITHUB_EVENT_PATH: ${{ github.event_path }}
-    GITHUB_SHA: ${{ github.sha }}
-    GITHUB_REF: ${{ github.ref }}
+  using: 'composite'
+  steps:
+    - name: Setup Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.3'
+        bundler-cache: false
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        cd ${{ github.action_path }}
+        bundle config set --local without 'development test'
+        bundle install --jobs 4 --retry 3
+
+    - name: Select task
+      id: select-task
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        CONFIG_PATH: ${{ inputs.config_path }}
+        CATEGORY: ${{ inputs.category }}
+      run: |
+        cd ${{ github.action_path }}
+        ruby lib/select_task.rb
+
+    - name: Run Claude
+      id: claude
+      if: steps.select-task.outputs.skipped != 'true'
+      uses: anthropics/claude-code-action@beta
+      with:
+        anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        prompt: ${{ steps.select-task.outputs.prompt }}
+        allowed_tools: |
+          Read
+          Edit
+          Write
+          Glob
+          Grep
+          Bash(git status:read repository status)
+          Bash(git diff:view changes)
+          Bash(git add:stage files)
+          Bash(bundle exec rspec:run tests)
+          Bash(npm test:run tests)
+          Bash(pytest:run tests)
+
+    - name: Create branch and PR
+      id: create-pr
+      if: steps.select-task.outputs.skipped != 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        CATEGORY: ${{ steps.select-task.outputs.category }}
+        BASE_LABEL: ${{ steps.select-task.outputs.base_label }}
+      run: |
+        cd ${{ github.action_path }}
+        ruby lib/create_pr.rb
