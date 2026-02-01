@@ -1,0 +1,40 @@
+name: 'Claude Gardener'
+description: 'Autonomous code improvement with Claude'
+author: 'mockdeep'
+
+branding:
+  icon: 'git-pull-request'
+  color: 'green'
+
+inputs:
+  anthropic_api_key:
+    description: 'Anthropic API key for Claude'
+    required: true
+  github_token:
+    description: 'GitHub token for PR operations'
+    required: true
+  config_path:
+    description: 'Path to claude-gardener.yml config'
+    default: 'claude-gardener.yml'
+  event_type:
+    description: 'The GitHub event that triggered this run'
+    required: true
+  category:
+    description: 'Specific category to work on (optional, for workflow_dispatch)'
+    required: false
+    default: 'auto'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.event_type }}
+    - ${{ inputs.config_path }}
+    - ${{ inputs.category }}
+  env:
+    ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+    GITHUB_TOKEN: ${{ inputs.github_token }}
+    GITHUB_REPOSITORY: ${{ github.repository }}
+    GITHUB_EVENT_PATH: ${{ github.event_path }}
+    GITHUB_SHA: ${{ github.sha }}
+    GITHUB_REF: ${{ github.ref }}

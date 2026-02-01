@@ -1,0 +1,53 @@
+# Claude Gardener Configuration
+# Copy this file to your repository root as `claude-gardener.yml`
+
+version: 1
+
+# Worker configuration
+workers:
+  max_concurrent: 3              # Maximum simultaneous gardener PRs
+
+# Task priorities (in order of priority)
+# Categories are worked through in order until one has available work
+priorities:
+  - category: test_coverage
+    max_prs: 3                   # Max open PRs before moving to next category
+    enabled: true
+
+  - category: security_fixes
+    max_prs: 2
+    enabled: true
+
+  - category: linter_fixes
+    max_prs: 5
+    enabled: true
+
+  - category: code_improvements
+    max_prs: 3
+    enabled: true
+
+  # Custom refactoring tasks (optional)
+  # - category: user_transitions
+  #   max_prs: 2
+  #   enabled: true
+  #   tasks:
+  #     - "Migrate from RSpec let blocks to inline setup"
+  #     - "Replace ERB views with Phlex components"
+
+# Safety guardrails
+guardrails:
+  max_iterations_per_pr: 5       # Abandon PR after N review cycles
+  max_files_per_pr: 10           # Keep PRs focused
+  require_tests: true            # PRs must include/update tests
+
+# Label configuration
+labels:
+  base: "claude-gardener"        # Base label for all gardener PRs
+  categories: true               # Add category-specific labels (e.g., claude-gardener:test_coverage)
+
+# Paths to exclude from modifications
+excluded_paths:
+  - "vendor/**"
+  - "node_modules/**"
+  - ".github/**"                 # Don't modify workflow files by default
+  - "*.lock"                     # Don't modify lockfiles
