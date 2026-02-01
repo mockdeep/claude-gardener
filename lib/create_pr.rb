@@ -44,6 +44,10 @@ module ClaudeGardener
       timestamp = Time.now.strftime("%Y%m%d-%H%M%S")
       branch_name = "gardener/#{@category}/#{timestamp}"
 
+      # Set git identity for commits
+      system("git", "config", "user.name", "Claude Gardener")
+      system("git", "config", "user.email", "claude-gardener[bot]@users.noreply.github.com")
+
       system("git", "checkout", "-b", branch_name)
       branch_name
     end
