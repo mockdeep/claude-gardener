@@ -53,7 +53,14 @@ module ClaudeGardener
     end
 
     def commit_changes(branch_name)
+      # Reset any Claude output files that shouldn't be committed
+      system("git", "checkout", "--", "output.txt") if File.exist?("output.txt")
+      system("git", "checkout", "--", "claude-output.txt") if File.exist?("claude-output.txt")
+
       system("git", "add", "-A")
+
+      # Unstage any remaining output files
+      system("git", "reset", "HEAD", "--", "output.txt", "claude-output.txt", "*.log")
 
       commit_message = <<~MSG
         [gardener] #{@category.tr("_", " ").capitalize} improvements
