@@ -8,8 +8,11 @@ branding:
 
 inputs:
   anthropic_api_key:
-    description: 'Anthropic API key for Claude'
-    required: true
+    description: 'Anthropic API key for Claude (use this OR claude_oauth_token)'
+    required: false
+  claude_oauth_token:
+    description: 'Claude OAuth token for Max/Pro subscribers (use this OR anthropic_api_key)'
+    required: false
   github_token:
     description: 'GitHub token for PR operations'
     required: true
@@ -65,6 +68,7 @@ runs:
       uses: anthropics/claude-code-action@beta
       with:
         anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        claude_code_oauth_token: ${{ inputs.claude_oauth_token }}
         mode: 'agent'
         direct_prompt: ${{ steps.select-task.outputs.prompt }}
         allowed_tools: |
