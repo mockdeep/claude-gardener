@@ -1,0 +1,13 @@
+version: 2
+
+max_concurrent: 3
+
+categories:
+  - test_coverage
+  - code_improvements
+
+excluded_paths:
+  - "vendor/**"
+  - "node_modules/**"
+  - ".github/**"
+  - "*.lock"
