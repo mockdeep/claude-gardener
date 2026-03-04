@@ -1,0 +1,45 @@
+name: Gardener Scan
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      categories: ${{ steps.plan.outputs.categories }}
+      plan_issue: ${{ steps.plan.outputs.plan_issue }}
+      skipped: ${{ steps.plan.outputs.skipped }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create scan plan
+        id: plan
+        uses: mockdeep/claude-gardener/actions/plan-scan@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  scan:
+    needs: plan
+    if: needs.plan.outputs.skipped != 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        category: ${{ fromJson(needs.plan.outputs.categories) }}
+      max-parallel: 2
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run scan
+        uses: mockdeep/claude-gardener/actions/run-scan@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          category: ${{ matrix.category }}
+          plan_issue: ${{ needs.plan.outputs.plan_issue }}
