@@ -68,6 +68,75 @@ RSpec.describe ClaudeGardener::Config do
     end
   end
 
+  describe "v2 schema" do
+    it "parses v2 config" do
+      config = described_class.new(
+        "version" => 2,
+        "max_concurrent" => 7,
+        "categories" => %w[test_coverage security_fixes]
+      )
+
+      expect(config.version).to eq(2)
+      expect(config.max_concurrent).to eq(7)
+      expect(config.categories).to eq(%w[test_coverage security_fixes])
+    end
+
+    it "provides v1-compatible accessors" do
+      config = described_class.new(
+        "version" => 2,
+        "categories" => %w[test_coverage]
+      )
+
+      expect(config.workers.max_concurrent).to eq(5)
+      expect(config.priorities.length).to eq(1)
+      expect(config.priorities.first.category).to eq("test_coverage")
+      expect(config.guardrails.max_files_per_pr).to eq(10)
+      expect(config.labels.base).to eq("claude-gardener")
+    end
+
+    it "uses default categories when none specified" do
+      config = described_class.new("version" => 2)
+
+      expect(config.categories).to eq(%w[test_coverage security_fixes linter_fixes code_improvements])
+    end
+
+    it "uses default excluded_paths" do
+      config = described_class.new("version" => 2)
+
+      expect(config.excluded_paths).to include("vendor/**")
+    end
+  end
+
+  describe "#enabled_categories" do
+    it "returns enabled category names for v1" do
+      config = described_class.new(
+        "priorities" => [
+          { "category" => "test_coverage", "enabled" => true },
+          { "category" => "security_fixes", "enabled" => false }
+        ]
+      )
+
+      expect(config.enabled_categories).to eq(%w[test_coverage])
+    end
+
+    it "returns all categories for v2" do
+      config = described_class.new(
+        "version" => 2,
+        "categories" => %w[test_coverage security_fixes]
+      )
+
+      expect(config.enabled_categories).to eq(%w[test_coverage security_fixes])
+    end
+  end
+
+  describe "#max_concurrent" do
+    it "delegates to workers" do
+      config = described_class.new({})
+
+      expect(config.max_concurrent).to eq(3)
+    end
+  end
+
   describe ClaudeGardener::Config::Labels do
     describe "#for_category" do
       it "returns base label and category label when categories enabled" do

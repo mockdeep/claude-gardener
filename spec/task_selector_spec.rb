@@ -14,13 +14,11 @@ RSpec.describe ClaudeGardener::TaskSelector do
   end
 
   let(:pr_manager) { instance_double(ClaudeGardener::PrManager) }
-  let(:lock_checker) { instance_double(ClaudeGardener::LockChecker, locked_files: Set.new) }
 
   subject(:selector) do
     described_class.new(
       config: config,
-      pr_manager: pr_manager,
-      lock_checker: lock_checker
+      pr_manager: pr_manager
     )
   end
 
@@ -98,15 +96,6 @@ RSpec.describe ClaudeGardener::TaskSelector do
       task = selector.select_task_for_category("unknown")
 
       expect(task).to be_nil
-    end
-
-    it "includes locked files in the task" do
-      allow(lock_checker).to receive(:locked_files).and_return(Set.new(["file.rb"]))
-      allow(pr_manager).to receive(:open_prs_for_category).and_return([])
-
-      task = selector.select_task_for_category("test_coverage")
-
-      expect(task.locked_files).to include("file.rb")
     end
   end
 end

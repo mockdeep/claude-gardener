@@ -82,5 +82,33 @@ module ClaudeGardener
     rescue Octokit::NotFound
       @client.add_label(@repository, name, color, description: description)
     end
+
+    # Issue methods
+
+    def create_issue(title:, body:, labels: [])
+      @client.create_issue(@repository, title, body, labels: labels)
+    end
+
+    def update_issue(number, body: nil, state: nil, labels: nil)
+      options = {}
+      options[:body] = body if body
+      options[:state] = state if state
+      options[:labels] = labels if labels
+      @client.update_issue(@repository, number, options)
+    end
+
+    def close_issue(number)
+      @client.close_issue(@repository, number)
+    end
+
+    def list_issues(state: "open", labels: nil)
+      options = { state: state }
+      options[:labels] = labels.join(",") if labels
+      @client.list_issues(@repository, **options)
+    end
+
+    def issue(number)
+      @client.issue(@repository, number)
+    end
   end
 end

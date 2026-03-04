@@ -1,0 +1,84 @@
+name: 'Claude Gardener - Run Scan'
+description: 'Phase 2: Scan a category for work items and create aggregate issue'
+author: 'mockdeep'
+
+inputs:
+  github_token:
+    description: 'GitHub token for issue operations'
+    required: true
+  anthropic_api_key:
+    description: 'Anthropic API key for Claude'
+    required: false
+  claude_oauth_token:
+    description: 'Claude OAuth token for Max/Pro subscribers'
+    required: false
+  config_path:
+    description: 'Path to claude-gardener.yml config'
+    default: 'claude-gardener.yml'
+  category:
+    description: 'Category to scan'
+    required: true
+  plan_issue:
+    description: 'Plan issue number to check off after scanning'
+    required: false
+
+outputs:
+  aggregate_issue:
+    description: 'The aggregate issue number created'
+    value: ${{ steps.post-scan.outputs.aggregate_issue }}
+  skipped:
+    description: 'Whether the scan was skipped'
+    value: ${{ steps.post-scan.outputs.skipped }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.3'
+        bundler-cache: false
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        cd ${{ github.action_path }}/../..
+        bundle config set --local without 'development test'
+        bundle install --jobs 4 --retry 3
+
+    - name: Prepare scan prompt
+      id: prepare
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        CONFIG_PATH: ${{ inputs.config_path }}
+        CATEGORY: ${{ inputs.category }}
+        PLAN_ISSUE: ${{ inputs.plan_issue }}
+      run: ruby ${{ github.action_path }}/../../lib/scanner.rb run
+
+    - name: Run Claude scan
+      id: claude
+      uses: anthropics/claude-code-action@beta
+      with:
+        anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        claude_code_oauth_token: ${{ inputs.claude_oauth_token }}
+        mode: 'agent'
+        direct_prompt: ${{ steps.prepare.outputs.prompt }}
+        allowed_tools: |
+          Read
+          Glob
+          Grep
+          Bash(find:search for files)
+          Bash(wc:count lines)
+          Bash(ls:list files)
+
+    - name: Process scan results
+      id: post-scan
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        CONFIG_PATH: ${{ inputs.config_path }}
+        CATEGORY: ${{ inputs.category }}
+        PLAN_ISSUE: ${{ inputs.plan_issue }}
+        CLAUDE_OUTPUT: ${{ steps.claude.outputs.result }}
+      run: ruby -e "require_relative '${{ github.action_path }}/../../lib/scanner'; ClaudeGardener::Scanner.post_scan"

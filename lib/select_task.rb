@@ -5,17 +5,18 @@ require_relative "config"
 require_relative "github_client"
 require_relative "task_selector"
 require_relative "pr_manager"
-require_relative "lock_checker"
+require_relative "output_writer"
 
 module ClaudeGardener
   class SelectTask
+    include OutputWriter
+
     def self.run
       new.run
     end
 
     def initialize
       config_path = ENV.fetch("CONFIG_PATH", "claude-gardener.yml")
-      # Config is in the user's repo, not the action directory
       workspace = ENV.fetch("GITHUB_WORKSPACE", Dir.pwd)
       full_config_path = File.join(workspace, config_path)
 
@@ -23,11 +24,9 @@ module ClaudeGardener
       @category = ENV.fetch("CATEGORY", "auto")
       @github = GithubClient.new
       @pr_manager = PrManager.new(github: @github, config: @config)
-      @lock_checker = LockChecker.new(github: @github, config: @config)
       @task_selector = TaskSelector.new(
         config: @config,
-        pr_manager: @pr_manager,
-        lock_checker: @lock_checker
+        pr_manager: @pr_manager
       )
     end
 
@@ -73,20 +72,11 @@ module ClaudeGardener
       write_output("category", task.category)
       write_output("base_label", @config.labels.base)
 
-      # Build the full prompt with constraints
       full_prompt = build_full_prompt(task)
       write_output("prompt", full_prompt)
     end
 
     def build_full_prompt(task)
-      locked_files_list = task.locked_files.to_a
-      locked_section = if locked_files_list.any?
-        "\n\n## Locked Files (do not modify)\n\n" +
-          locked_files_list.map { |f| "- #{f}" }.join("\n")
-      else
-        ""
-      end
-
       <<~PROMPT
         #{task.prompt}
 
@@ -97,7 +87,6 @@ module ClaudeGardener
         - Keep changes focused and minimal
         - Follow existing code conventions
         - Read CLAUDE.md if present for project-specific guidelines
-        #{locked_section}
 
         ## Excluded Paths
 
@@ -106,25 +95,6 @@ module ClaudeGardener
 
         After making changes, provide a brief summary of what you changed.
       PROMPT
-    end
-
-    def write_output(name, value)
-      output_file = ENV.fetch("GITHUB_OUTPUT", nil)
-      if output_file
-        # Handle multiline values
-        if value.include?("\n")
-          delimiter = "EOF_#{rand(1000000)}"
-          File.open(output_file, "a") do |f|
-            f.puts "#{name}<<#{delimiter}"
-            f.puts value
-            f.puts delimiter
-          end
-        else
-          File.open(output_file, "a") { |f| f.puts "#{name}=#{value}" }
-        end
-      else
-        puts "#{name}=#{value}"
-      end
     end
   end
 end

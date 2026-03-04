@@ -2,10 +2,9 @@
 
 module ClaudeGardener
   class TaskSelector
-    def initialize(config:, pr_manager:, lock_checker:)
+    def initialize(config:, pr_manager:)
       @config = config
       @pr_manager = pr_manager
-      @lock_checker = lock_checker
     end
 
     def select_next_task
@@ -26,8 +25,7 @@ module ClaudeGardener
 
       Task.new(
         category: category,
-        prompt: load_prompt(category, priority.tasks),
-        locked_files: @lock_checker.locked_files
+        prompt: load_prompt(category, priority.tasks)
       )
     end
 
@@ -62,12 +60,11 @@ module ClaudeGardener
   end
 
   class Task
-    attr_reader :category, :prompt, :locked_files
+    attr_reader :category, :prompt
 
-    def initialize(category:, prompt:, locked_files:)
+    def initialize(category:, prompt:)
       @category = category
       @prompt = prompt
-      @locked_files = locked_files
     end
   end
 end

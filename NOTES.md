@@ -34,7 +34,7 @@ address any feedback. It should again make any relevant updates to skills and
 ## Needs
 
 * Limit the number of PRs created per day, or maybe open at a time.
-* Need the agent to be able to run freely with 
+* Need the agent to be able to run freely with `--dangerously-skip-permissions`.
 
 ## Reference
 
@@ -44,6 +44,7 @@ address any feedback. It should again make any relevant updates to skills and
 * Agent Docs https://openai.com/index/harness-engineering/#we-made-repository-knowledge-the-system-of-record
 * code-on-incus https://github.com/mensfeld/code-on-incus
 * Github Dev Containers https://github.com/devcontainers/
+* tmx-claude, tmx-worktree https://gist.github.com/andynu/294bf3c468fdada439eb8c2eee71c9c4
 
 ## Questions
 

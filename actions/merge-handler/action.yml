@@ -1,0 +1,43 @@
+name: 'Claude Gardener - Merge Handler'
+description: 'Phase 6: Post-merge cleanup (check off items, detect conflicts)'
+author: 'mockdeep'
+
+inputs:
+  github_token:
+    description: 'GitHub token for issue operations'
+    required: true
+  pr_number:
+    description: 'Pull request number that was merged'
+    required: true
+
+outputs:
+  skipped:
+    description: 'Whether the handler was skipped'
+    value: ${{ steps.merge.outputs.skipped }}
+  conflicting_prs:
+    description: 'Comma-separated list of PR numbers with potential conflicts'
+    value: ${{ steps.merge.outputs.conflicting_prs }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.3'
+        bundler-cache: false
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        cd ${{ github.action_path }}/../..
+        bundle config set --local without 'development test'
+        bundle install --jobs 4 --retry 3
+
+    - name: Handle merge
+      id: merge
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        PR_NUMBER: ${{ inputs.pr_number }}
+      run: ruby ${{ github.action_path }}/../../lib/merge_handler.rb

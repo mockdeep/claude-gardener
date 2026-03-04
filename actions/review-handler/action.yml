@@ -1,0 +1,82 @@
+name: 'Claude Gardener - Review Handler'
+description: 'Phase 4: Respond to PR review comments'
+author: 'mockdeep'
+
+inputs:
+  github_token:
+    description: 'GitHub token for PR operations'
+    required: true
+  anthropic_api_key:
+    description: 'Anthropic API key for Claude'
+    required: false
+  claude_oauth_token:
+    description: 'Claude OAuth token for Max/Pro subscribers'
+    required: false
+  pr_number:
+    description: 'Pull request number'
+    required: true
+
+outputs:
+  skipped:
+    description: 'Whether the handler was skipped'
+    value: ${{ steps.prepare.outputs.skipped }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.3'
+        bundler-cache: false
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        cd ${{ github.action_path }}/../..
+        bundle config set --local without 'development test'
+        bundle install --jobs 4 --retry 3
+
+    - name: Prepare review response
+      id: prepare
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        PR_NUMBER: ${{ inputs.pr_number }}
+      run: ruby ${{ github.action_path }}/../../lib/review_handler.rb
+
+    - name: Checkout PR branch
+      if: steps.prepare.outputs.skipped != 'true'
+      shell: bash
+      run: git checkout ${{ steps.prepare.outputs.branch }}
+
+    - name: Run Claude
+      id: claude
+      if: steps.prepare.outputs.skipped != 'true'
+      uses: anthropics/claude-code-action@beta
+      with:
+        anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        claude_code_oauth_token: ${{ inputs.claude_oauth_token }}
+        mode: 'agent'
+        direct_prompt: ${{ steps.prepare.outputs.prompt }}
+        allowed_tools: |
+          Read
+          Edit
+          Write
+          Glob
+          Grep
+          Bash(git status:read repository status)
+          Bash(git diff:view changes)
+          Bash(git add:stage files)
+          Bash(bundle exec rspec:run tests)
+          Bash(npm test:run tests)
+          Bash(pytest:run tests)
+
+    - name: Amend and push
+      if: steps.prepare.outputs.skipped != 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        CATEGORY: ${{ steps.prepare.outputs.category }}
+        AMEND: 'true'
+      run: ruby ${{ github.action_path }}/../../lib/create_pr.rb

@@ -1,0 +1,90 @@
+name: 'Claude Gardener - Work'
+description: 'Phase 3b: Execute a single work item'
+author: 'mockdeep'
+
+inputs:
+  github_token:
+    description: 'GitHub token for PR operations'
+    required: true
+  anthropic_api_key:
+    description: 'Anthropic API key for Claude'
+    required: false
+  claude_oauth_token:
+    description: 'Claude OAuth token for Max/Pro subscribers'
+    required: false
+  config_path:
+    description: 'Path to claude-gardener.yml config'
+    default: 'claude-gardener.yml'
+  task:
+    description: 'JSON task object from setup-work matrix'
+    required: true
+
+outputs:
+  pr_number:
+    description: 'The PR number created, if any'
+    value: ${{ steps.create-pr.outputs.pr_number }}
+  pr_url:
+    description: 'The PR URL created, if any'
+    value: ${{ steps.create-pr.outputs.pr_url }}
+  skipped:
+    description: 'Whether the work was skipped'
+    value: ${{ steps.prepare.outputs.skipped }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.3'
+        bundler-cache: false
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        cd ${{ github.action_path }}/../..
+        bundle config set --local without 'development test'
+        bundle install --jobs 4 --retry 3
+
+    - name: Prepare work
+      id: prepare
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        CONFIG_PATH: ${{ inputs.config_path }}
+        TASK: ${{ inputs.task }}
+      run: ruby ${{ github.action_path }}/../../lib/worker.rb
+
+    - name: Run Claude
+      id: claude
+      if: steps.prepare.outputs.skipped != 'true'
+      uses: anthropics/claude-code-action@beta
+      with:
+        anthropic_api_key: ${{ inputs.anthropic_api_key }}
+        claude_code_oauth_token: ${{ inputs.claude_oauth_token }}
+        mode: 'agent'
+        direct_prompt: ${{ steps.prepare.outputs.prompt }}
+        allowed_tools: |
+          Read
+          Edit
+          Write
+          Glob
+          Grep
+          Bash(git status:read repository status)
+          Bash(git diff:view changes)
+          Bash(git add:stage files)
+          Bash(bundle exec rspec:run tests)
+          Bash(npm test:run tests)
+          Bash(pytest:run tests)
+
+    - name: Create branch and PR
+      id: create-pr
+      if: steps.prepare.outputs.skipped != 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        CATEGORY: ${{ steps.prepare.outputs.category }}
+        BASE_LABEL: claude-gardener
+        AGGREGATE_ISSUE: ${{ steps.prepare.outputs.aggregate_issue }}
+        ITEM_TEXT: ${{ steps.prepare.outputs.item_text }}
+      run: ruby ${{ github.action_path }}/../../lib/create_pr.rb

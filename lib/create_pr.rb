@@ -3,9 +3,12 @@
 
 require "open3"
 require "time"
+require_relative "output_writer"
 
 module ClaudeGardener
   class CreatePR
+    include OutputWriter
+
     def self.run
       new.run
     end
@@ -14,6 +17,9 @@ module ClaudeGardener
       @category = ENV.fetch("CATEGORY")
       @base_label = ENV.fetch("BASE_LABEL", "claude-gardener")
       @repository = ENV.fetch("GITHUB_REPOSITORY")
+      @amend = ENV.fetch("AMEND", "false") == "true"
+      @aggregate_issue = ENV.fetch("AGGREGATE_ISSUE", nil)
+      @item_text = ENV.fetch("ITEM_TEXT", nil)
     end
 
     def run
@@ -26,16 +32,20 @@ module ClaudeGardener
         return
       end
 
-      branch_name = create_branch
-      commit_changes(branch_name)
-      push_branch(branch_name)
-      pr_number, pr_url = create_pull_request(branch_name)
+      if @amend
+        amend_and_push
+      else
+        branch_name = create_branch
+        commit_changes
+        push_branch(branch_name)
+        pr_number, pr_url = create_pull_request(branch_name)
 
-      add_labels(pr_number)
+        add_labels(pr_number)
 
-      puts "Created PR ##{pr_number}: #{pr_url}"
-      write_output("pr_number", pr_number.to_s)
-      write_output("pr_url", pr_url)
+        puts "Created PR ##{pr_number}: #{pr_url}"
+        write_output("pr_number", pr_number.to_s)
+        write_output("pr_url", pr_url)
+      end
     end
 
     private
@@ -52,10 +62,8 @@ module ClaudeGardener
       branch_name
     end
 
-    def commit_changes(branch_name)
-      # Reset any Claude output files that shouldn't be committed
-      system("git", "checkout", "--", "output.txt") if File.exist?("output.txt")
-      system("git", "checkout", "--", "claude-output.txt") if File.exist?("claude-output.txt")
+    def commit_changes
+      exclude_output_files
 
       system("git", "add", "-A")
 
@@ -73,6 +81,22 @@ module ClaudeGardener
       system("git", "commit", "-m", commit_message)
     end
 
+    def amend_and_push
+      exclude_output_files
+
+      system("git", "add", "-A")
+      system("git", "reset", "HEAD", "--", "output.txt", "claude-output.txt", "*.log")
+      system("git", "commit", "--amend", "--no-edit")
+      system("git", "push", "--force-with-lease")
+
+      puts "Amended commit and force-pushed."
+    end
+
+    def exclude_output_files
+      system("git", "checkout", "--", "output.txt") if File.exist?("output.txt")
+      system("git", "checkout", "--", "claude-output.txt") if File.exist?("claude-output.txt")
+    end
+
     def push_branch(branch_name)
       system("git", "push", "-u", "origin", branch_name)
     end
@@ -80,23 +104,7 @@ module ClaudeGardener
     def create_pull_request(branch_name)
       title = "[Gardener] #{@category.tr("_", " ").capitalize} improvements"
 
-      body = <<~BODY
-        ## Summary
-
-        Automated improvements by Claude Gardener.
-
-        **Category:** #{@category}
-
-        ---
-
-        <!-- gardener-metadata
-        iteration: 1
-        category: #{@category}
-        started: #{Time.now.utc.iso8601}
-        -->
-
-        🤖 *This PR was created by [Claude Gardener](https://github.com/mockdeep/claude-gardener)*
-      BODY
+      body = build_pr_body
 
       output, = Open3.capture2(
         "gh", "pr", "create",
@@ -110,6 +118,39 @@ module ClaudeGardener
       pr_number = pr_url.split("/").last.to_i
 
       [pr_number, pr_url]
+    end
+
+    def build_pr_body
+      issue_ref = if @aggregate_issue
+        "\n**Source issue:** ##{@aggregate_issue}"
+      else
+        ""
+      end
+
+      task_ref = if @item_text
+        "\n**Task:** #{@item_text}"
+      else
+        ""
+      end
+
+      <<~BODY
+        ## Summary
+
+        Automated improvements by Claude Gardener.
+
+        **Category:** #{@category}#{issue_ref}#{task_ref}
+
+        ---
+
+        <!-- gardener-metadata
+        iteration: 1
+        category: #{@category}
+        aggregate_issue: #{@aggregate_issue || "none"}
+        started: #{Time.now.utc.iso8601}
+        -->
+
+        🤖 *This PR was created by [Claude Gardener](https://github.com/mockdeep/claude-gardener)*
+      BODY
     end
 
     def add_labels(pr_number)
@@ -133,15 +174,6 @@ module ClaudeGardener
         "claude-gardener:code_improvements" => "c5def5"
       }
       colors[label] || "ededed"
-    end
-
-    def write_output(name, value)
-      output_file = ENV.fetch("GITHUB_OUTPUT", nil)
-      if output_file
-        File.open(output_file, "a") { |f| f.puts "#{name}=#{value}" }
-      else
-        puts "#{name}=#{value}"
-      end
     end
   end
 end

@@ -1,0 +1,54 @@
+name: Gardener Scan
+
+on:
+  workflow_dispatch: {}
+  # Optionally run on a schedule:
+  # schedule:
+  #   - cron: '0 6 * * 1'  # Every Monday at 6am
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      categories: ${{ steps.plan.outputs.categories }}
+      plan_issue: ${{ steps.plan.outputs.plan_issue }}
+      skipped: ${{ steps.plan.outputs.skipped }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create scan plan
+        id: plan
+        uses: mockdeep/claude-gardener/actions/plan-scan@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  scan:
+    needs: plan
+    if: needs.plan.outputs.skipped != 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        category: ${{ fromJson(needs.plan.outputs.categories) }}
+      max-parallel: 2
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      # Add your project-specific setup here:
+      # - name: Setup Node
+      #   uses: actions/setup-node@v4
+      # - run: npm install
+
+      - name: Run scan
+        uses: mockdeep/claude-gardener/actions/run-scan@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          config_path: claude-gardener.yml
+          category: ${{ matrix.category }}
+          plan_issue: ${{ needs.plan.outputs.plan_issue }}

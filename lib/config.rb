@@ -4,6 +4,13 @@ require "yaml"
 
 module ClaudeGardener
   class Config
+    DEFAULT_CATEGORIES = %w[
+      test_coverage
+      security_fixes
+      linter_fixes
+      code_improvements
+    ].freeze
+
     DEFAULT_CONFIG = {
       "version" => 1,
       "workers" => { "max_concurrent" => 3 },
@@ -28,17 +35,16 @@ module ClaudeGardener
       ]
     }.freeze
 
-    attr_reader :version, :workers, :priorities, :guardrails, :labels, :excluded_paths
+    attr_reader :version, :workers, :priorities, :guardrails, :labels, :excluded_paths, :categories
 
     def initialize(config_hash)
-      merged = deep_merge(DEFAULT_CONFIG, config_hash)
+      @version = config_hash.fetch("version", 1)
 
-      @version = merged["version"]
-      @workers = Workers.new(merged["workers"])
-      @priorities = merged["priorities"].map { |p| Priority.new(p) }
-      @guardrails = Guardrails.new(merged["guardrails"])
-      @labels = Labels.new(merged["labels"])
-      @excluded_paths = merged["excluded_paths"]
+      if @version >= 2
+        init_v2(config_hash)
+      else
+        init_v1(config_hash)
+      end
     end
 
     def self.load(path)
@@ -51,6 +57,10 @@ module ClaudeGardener
       new(config_hash)
     end
 
+    def max_concurrent
+      @workers.max_concurrent
+    end
+
     def enabled_priorities
       @priorities.select(&:enabled?)
     end
@@ -59,7 +69,43 @@ module ClaudeGardener
       @priorities.find { |p| p.category == category }
     end
 
+    def enabled_categories
+      if @version >= 2
+        @categories
+      else
+        enabled_priorities.map(&:category)
+      end
+    end
+
     private
+
+    def init_v1(config_hash)
+      merged = deep_merge(DEFAULT_CONFIG, config_hash)
+
+      @workers = Workers.new(merged["workers"])
+      @priorities = merged["priorities"].map { |p| Priority.new(p) }
+      @guardrails = Guardrails.new(merged["guardrails"])
+      @labels = Labels.new(merged["labels"])
+      @excluded_paths = merged["excluded_paths"]
+      @categories = enabled_priorities.map(&:category)
+    end
+
+    def init_v2(config_hash)
+      @categories = config_hash.fetch("categories", DEFAULT_CATEGORIES)
+      @workers = Workers.new("max_concurrent" => config_hash.fetch("max_concurrent", 5))
+      @excluded_paths = config_hash.fetch("excluded_paths", ["vendor/**", "node_modules/**"])
+
+      # Provide v1-compatible accessors with sensible defaults
+      @priorities = @categories.map do |cat|
+        Priority.new("category" => cat, "max_prs" => 3, "enabled" => true)
+      end
+      @guardrails = Guardrails.new(
+        "max_iterations_per_pr" => 5,
+        "max_files_per_pr" => 10,
+        "require_tests" => true
+      )
+      @labels = Labels.new("base" => "claude-gardener", "categories" => true)
+    end
 
     def deep_merge(base, override)
       base.merge(override) do |_key, old_val, new_val|

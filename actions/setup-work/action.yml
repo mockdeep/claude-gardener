@@ -1,0 +1,43 @@
+name: 'Claude Gardener - Setup Work'
+description: 'Phase 3a: Compute worker matrix from aggregate issues'
+author: 'mockdeep'
+
+inputs:
+  github_token:
+    description: 'GitHub token for issue operations'
+    required: true
+  config_path:
+    description: 'Path to claude-gardener.yml config'
+    default: 'claude-gardener.yml'
+
+outputs:
+  tasks:
+    description: 'JSON array of tasks for matrix fan-out'
+    value: ${{ steps.select.outputs.tasks }}
+  skipped:
+    description: 'Whether the run was skipped (at capacity or no work)'
+    value: ${{ steps.select.outputs.skipped }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.3'
+        bundler-cache: false
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        cd ${{ github.action_path }}/../..
+        bundle config set --local without 'development test'
+        bundle install --jobs 4 --retry 3
+
+    - name: Select work items
+      id: select
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        CONFIG_PATH: ${{ inputs.config_path }}
+      run: ruby ${{ github.action_path }}/../../lib/work_selector.rb

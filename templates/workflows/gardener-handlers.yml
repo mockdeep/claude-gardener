@@ -1,0 +1,70 @@
+name: Gardener Handlers
+
+on:
+  pull_request_review:
+    types: [submitted]
+  check_suite:
+    types: [completed]
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  review-handler:
+    if: github.event_name == 'pull_request_review'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Handle review
+        uses: mockdeep/claude-gardener/actions/review-handler@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          pr_number: ${{ github.event.pull_request.number }}
+
+  build-handler:
+    if: >
+      github.event_name == 'check_suite' &&
+      github.event.check_suite.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # You'll need to determine the PR number from the check suite
+      # This is a simplified example
+      - name: Get PR number
+        id: pr
+        shell: bash
+        run: |
+          PR_NUMBER=$(gh pr list --head "${{ github.event.check_suite.head_branch }}" --json number --jq '.[0].number')
+          echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Handle build failure
+        if: steps.pr.outputs.number != ''
+        uses: mockdeep/claude-gardener/actions/build-handler@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          pr_number: ${{ steps.pr.outputs.number }}
+
+  merge-handler:
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Handle merge
+        uses: mockdeep/claude-gardener/actions/merge-handler@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          pr_number: ${{ github.event.pull_request.number }}

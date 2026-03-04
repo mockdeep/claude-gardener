@@ -1,0 +1,53 @@
+name: Gardener Work
+
+on:
+  workflow_dispatch: {}
+  # Optionally trigger after scan completes:
+  # workflow_run:
+  #   workflows: ["Gardener Scan"]
+  #   types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      tasks: ${{ steps.setup.outputs.tasks }}
+      skipped: ${{ steps.setup.outputs.skipped }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select work items
+        id: setup
+        uses: mockdeep/claude-gardener/actions/setup-work@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  work:
+    needs: setup
+    if: needs.setup.outputs.skipped != 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        task: ${{ fromJson(needs.setup.outputs.tasks) }}
+      max-parallel: 3
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      # Add your project-specific setup here:
+      # - name: Setup Node
+      #   uses: actions/setup-node@v4
+      # - run: npm install
+
+      - name: Execute work item
+        uses: mockdeep/claude-gardener/actions/work@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          task: ${{ toJson(matrix.task) }}

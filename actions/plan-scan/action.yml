@@ -1,0 +1,46 @@
+name: 'Claude Gardener - Plan Scan'
+description: 'Phase 1: Create a scan plan issue with categories to scan'
+author: 'mockdeep'
+
+inputs:
+  github_token:
+    description: 'GitHub token for issue operations'
+    required: true
+  config_path:
+    description: 'Path to claude-gardener.yml config'
+    default: 'claude-gardener.yml'
+
+outputs:
+  plan_issue:
+    description: 'The plan issue number created'
+    value: ${{ steps.plan.outputs.plan_issue }}
+  categories:
+    description: 'JSON array of categories to scan'
+    value: ${{ steps.plan.outputs.categories }}
+  skipped:
+    description: 'Whether the run was skipped (plan already exists)'
+    value: ${{ steps.plan.outputs.skipped }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.3'
+        bundler-cache: false
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        cd ${{ github.action_path }}/../..
+        bundle config set --local without 'development test'
+        bundle install --jobs 4 --retry 3
+
+    - name: Create scan plan
+      id: plan
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        CONFIG_PATH: ${{ inputs.config_path }}
+      run: ruby ${{ github.action_path }}/../../lib/scan_planner.rb
