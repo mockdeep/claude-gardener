@@ -156,6 +156,12 @@ categories:
 excluded_paths:
   - "vendor/**"
   - "node_modules/**"
+
+pr_assignees:
+  - your-github-username
+
+pr_reviewers:
+  - your-github-username
 ```
 
 ### V1 (legacy)

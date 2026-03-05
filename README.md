@@ -183,6 +183,8 @@ excluded_paths:
 | `max_concurrent` | 5 (v2) / 3 (v1) | Maximum simultaneous gardener PRs |
 | `categories` | All built-in | List of categories to scan and work on |
 | `excluded_paths` | [] | Glob patterns to exclude from scanning |
+| `pr_assignees` | [] | GitHub usernames to assign to each PR |
+| `pr_reviewers` | [] | GitHub usernames to request review from on each PR |
 
 ## How Coordination Works
 
