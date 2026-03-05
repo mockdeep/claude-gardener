@@ -71,6 +71,8 @@ module ClaudeGardener
         3. Make the minimal fix needed
         4. Run tests locally to verify if possible
         5. Do not make unrelated changes
+        6. If your fix changes behavior described in any project documentation, update those docs to reflect your changes
+        7. If you discover patterns or conventions from debugging this failure that are worth preserving, document them in a relevant topic-specific file (e.g., `docs/debugging.md`, `docs/build-setup.md`). Create the file if none exists for the topic. Do not add detailed patterns to CLAUDE.md.
       PROMPT
     end
 

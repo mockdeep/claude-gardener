@@ -1,60 +1,129 @@
 # Claude Gardener
 
-A GitHub Action that enables Claude to continuously make small improvements to your codebase. Claude Gardener selects tasks, makes focused changes, and creates PRs automatically.
+A GitHub Action that enables Claude to continuously make small improvements to your codebase. Claude Gardener scans for improvements, creates work items, and opens PRs automatically.
 
 ## How It Works
 
-1. **Trigger**: Run manually from the Actions tab (or on a schedule)
-2. **Select**: Picks the highest priority task with available capacity
-3. **Execute**: Claude makes focused changes to your code
-4. **PR**: Creates a labeled pull request for review
-5. **Repeat**: After merge, run again for the next improvement
+1. **Scan**: Analyzes your codebase per category (test coverage, security, etc.) and creates GitHub issues with checklists of improvements
+2. **Work**: Picks items from those checklists, makes focused changes, and creates PRs
+3. **Handle**: Responds to PR reviews, fixes build failures, and cleans up after merge
 
 ## Quick Start
 
-### 1. Create the workflow
+### 1. Create the workflows
 
-Add `.github/workflows/claude-gardener.yml`:
+You need three workflow files. Copy them from the [templates](templates/workflows/) directory:
+
+**`.github/workflows/gardener-scan.yml`** - Scans for improvements:
 
 ```yaml
-name: Claude Gardener
+name: Gardener Scan
 
 on:
-  workflow_dispatch:
-    inputs:
-      category:
-        description: 'Category to work on'
-        required: false
-        type: choice
-        options:
-          - auto
-          - test_coverage
-          - security_fixes
-          - linter_fixes
-          - code_improvements
+  workflow_dispatch: {}
+  # schedule:
+  #   - cron: '0 6 * * 1'  # Every Monday at 6am
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      categories: ${{ steps.plan.outputs.categories }}
+      plan_issue: ${{ steps.plan.outputs.plan_issue }}
+      skipped: ${{ steps.plan.outputs.skipped }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create scan plan
+        id: plan
+        uses: mockdeep/claude-gardener/actions/plan-scan@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  scan:
+    needs: plan
+    if: needs.plan.outputs.skipped != 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        category: ${{ fromJson(needs.plan.outputs.categories) }}
+      max-parallel: 2
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run scan
+        uses: mockdeep/claude-gardener/actions/run-scan@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          category: ${{ matrix.category }}
+          plan_issue: ${{ needs.plan.outputs.plan_issue }}
+```
+
+**`.github/workflows/gardener-work.yml`** - Executes improvements:
+
+```yaml
+name: Gardener Work
+
+on:
+  workflow_dispatch: {}
 
 permissions:
   contents: write
   pull-requests: write
+  issues: write
   id-token: write
 
 jobs:
-  garden:
+  setup:
     runs-on: ubuntu-latest
+    outputs:
+      tasks: ${{ steps.setup.outputs.tasks }}
+      skipped: ${{ steps.setup.outputs.skipped }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Claude Gardener
-        uses: mockdeep/claude-gardener@main
+      - name: Select work items
+        id: setup
+        uses: mockdeep/claude-gardener/actions/setup-work@main
         with:
-          claude_oauth_token: ${{ secrets.CLAUDE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          category: ${{ github.event.inputs.category || 'auto' }}
+
+  work:
+    needs: setup
+    if: needs.setup.outputs.skipped != 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        task: ${{ fromJson(needs.setup.outputs.tasks) }}
+      max-parallel: 3
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Execute work item
+        uses: mockdeep/claude-gardener/actions/work@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          task: ${{ toJson(matrix.task) }}
 ```
 
 ### 2. Add authentication
 
-**Option A: OAuth Token (for Max/Pro subscribers)**
+**Option A: API Key (pay-per-use)**
+
+```bash
+gh secret set ANTHROPIC_API_KEY
+```
+
+**Option B: OAuth Token (for Max/Pro subscribers)**
 
 ```bash
 # Get your token
@@ -64,17 +133,11 @@ claude auth token
 gh secret set CLAUDE_OAUTH_TOKEN
 ```
 
-**Option B: API Key (pay-per-use)**
-
-```bash
-gh secret set ANTHROPIC_API_KEY
-```
-
-Then use `anthropic_api_key` instead of `claude_oauth_token` in the workflow.
+Then use `claude_oauth_token` instead of `anthropic_api_key` in the workflows.
 
 ### 3. Enable PR creation
 
-Go to **Settings → Actions → General → Workflow permissions** and check:
+Go to **Settings -> Actions -> General -> Workflow permissions** and check:
 - "Allow GitHub Actions to create and approve pull requests"
 
 ### 4. Add configuration (optional)
@@ -82,27 +145,13 @@ Go to **Settings → Actions → General → Workflow permissions** and check:
 Create `claude-gardener.yml` in your repository root:
 
 ```yaml
-version: 1
+version: 2
 
-workers:
-  max_concurrent: 3
+max_concurrent: 3
 
-priorities:
-  - category: test_coverage
-    max_prs: 3
-    enabled: true
-
-  - category: linter_fixes
-    max_prs: 5
-    enabled: true
-
-  - category: code_improvements
-    max_prs: 3
-    enabled: true
-
-guardrails:
-  max_files_per_pr: 10
-  require_tests: true
+categories:
+  - test_coverage
+  - code_improvements
 
 excluded_paths:
   - "vendor/**"
@@ -111,7 +160,10 @@ excluded_paths:
 
 ### 5. Run it
 
-Go to **Actions → Claude Gardener → Run workflow**
+1. Go to **Actions -> Gardener Scan -> Run workflow** to scan for improvements
+2. Review the created issues to see what was found
+3. Go to **Actions -> Gardener Work -> Run workflow** to execute improvements
+4. Review the PRs that are created
 
 ## Task Categories
 
@@ -121,62 +173,25 @@ Go to **Actions → Claude Gardener → Run workflow**
 | `security_fixes` | Fixes security vulnerabilities (OWASP Top 10, secrets, etc.) |
 | `linter_fixes` | Fixes linter violations systematically |
 | `code_improvements` | Small improvements to readability and maintainability |
-
-### Custom Tasks
-
-Define your own refactoring tasks:
-
-```yaml
-priorities:
-  - category: user_transitions
-    max_prs: 2
-    enabled: true
-    tasks:
-      - "Migrate from RSpec let blocks to inline setup"
-      - "Replace ERB views with Phlex components"
-```
+| `add_tooling` | Adds development tooling (linters, test frameworks, etc.) |
 
 ## Configuration Reference
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `workers.max_concurrent` | 3 | Maximum simultaneous gardener PRs |
-| `priorities[].category` | - | Task category name |
-| `priorities[].max_prs` | 3 | Max open PRs for this category |
-| `priorities[].enabled` | true | Whether this category is active |
-| `priorities[].tasks` | [] | Custom task descriptions |
-| `guardrails.max_files_per_pr` | 10 | Max files changed per PR |
-| `guardrails.require_tests` | true | Require test coverage |
-| `labels.base` | "claude-gardener" | Base label for PRs |
-| `excluded_paths` | [] | Glob patterns to exclude |
+| `version` | 1 | Config schema version (use `2` for simplified format) |
+| `max_concurrent` | 5 (v2) / 3 (v1) | Maximum simultaneous gardener PRs |
+| `categories` | All built-in | List of categories to scan and work on |
+| `excluded_paths` | [] | Glob patterns to exclude from scanning |
 
 ## How Coordination Works
 
-Claude Gardener uses PR-based locking to prevent conflicts:
-
-- Checks which files are touched by open gardener PRs
-- Avoids modifying those files until PRs are merged/closed
-- Multiple runs can work on different areas simultaneously
-
-## Inputs
-
-| Input | Required | Description |
-|-------|----------|-------------|
-| `anthropic_api_key` | No* | Anthropic API key (pay-per-use) |
-| `claude_oauth_token` | No* | OAuth token for Max/Pro subscribers |
-| `github_token` | Yes | GitHub token for PR operations |
-| `config_path` | No | Path to config file (default: `claude-gardener.yml`) |
-| `category` | No | Specific category to work on (default: `auto`) |
-
-*One of `anthropic_api_key` or `claude_oauth_token` is required.
-
-## Outputs
-
-| Output | Description |
-|--------|-------------|
-| `pr_number` | The PR number created (if any) |
-| `pr_url` | The PR URL created (if any) |
-| `skipped` | Whether the run was skipped (at capacity or no work) |
+- **Scan plan issues** track which categories have been scanned
+- **Aggregate issues** contain checklists of work items per category
+- Work items are **claimed** by PRs to prevent duplicate work
+- Items are **checked off** when PRs merge
+- Aggregate issues **auto-close** when all items are complete
+- Re-running a scan closes old issues and creates fresh ones
 
 ## Troubleshooting
 
@@ -185,7 +200,7 @@ Claude Gardener uses PR-based locking to prevent conflicts:
 | "Credit balance too low" | Add API credits or use OAuth token |
 | "Resource not accessible by integration" | Add required permissions to workflow |
 | "id-token: write" error | Add `id-token: write` to permissions |
-| "Not permitted to create PRs" | Enable in Settings → Actions → General |
+| "Not permitted to create PRs" | Enable in Settings -> Actions -> General |
 
 ## License
 

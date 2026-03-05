@@ -69,6 +69,8 @@ module ClaudeGardener
         3. If a comment asks a question, make a best judgment on the fix
         4. Keep changes focused on what reviewers asked for
         5. Do not make additional unrelated changes
+        6. If your changes affect behavior described in any project documentation, update those docs to reflect your changes
+        7. If review comments reveal coding patterns, conventions, or preferences worth preserving, document them in a relevant topic-specific file (e.g., `docs/testing.md`, `docs/coding-conventions.md`). Create the file if none exists for the topic. Do not add detailed patterns to CLAUDE.md.
       PROMPT
     end
 

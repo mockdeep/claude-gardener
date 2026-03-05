@@ -83,6 +83,8 @@ module ClaudeGardener
         - Keep changes focused and minimal
         - Follow existing code conventions
         - Read CLAUDE.md if present for project-specific guidelines
+        - If your changes affect behavior described in any project documentation (in `docs/`, README, etc.), update those docs to reflect your changes
+        - If you discover coding patterns, conventions, or best practices worth preserving, document them in a relevant topic-specific file (e.g., `docs/testing.md`, `docs/coding-conventions.md`). Create the file if none exists for the topic. Do not add detailed patterns to CLAUDE.md — it should remain a high-level table of contents.
         #{docs_context}
 
         ## Excluded Paths
