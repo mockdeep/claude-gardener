@@ -81,7 +81,7 @@ runs:
           echo "Error: Claude execution file not found: $EXECUTION_FILE"
           exit 1
         fi
-        RESULT=$(ruby -rjson -e "puts JSON.parse(File.read('$EXECUTION_FILE'))['result']")
+        RESULT=$(ruby -rjson -e "entries = JSON.parse(File.read('$EXECUTION_FILE')); puts entries.find { |e| e['type'] == 'result' }.fetch('result')")
         if [ -z "$RESULT" ]; then
           echo "Error: No result in Claude execution output"
           exit 1
