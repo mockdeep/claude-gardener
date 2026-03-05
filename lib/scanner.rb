@@ -116,3 +116,5 @@ module ClaudeGardener
     end
   end
 end
+
+ClaudeGardener::Scanner.run if __FILE__ == $PROGRAM_NAME

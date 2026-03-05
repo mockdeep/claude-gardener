@@ -34,10 +34,14 @@ RSpec.describe ClaudeGardener::ScanPlanner do
       expect { planner.run }.to output(/Created scan plan issue #10/).to_stdout
     end
 
-    it "skips when a plan issue already exists" do
+    it "closes existing plan issue and creates a new one" do
       allow(issue_manager).to receive(:find_plan_issue).and_return(double(number: 5))
+      allow(issue_manager).to receive(:close_aggregate_issue).with(5)
+      allow(issue_manager).to receive(:create_plan_issue)
+        .with(categories: %w[test_coverage security_fixes])
+        .and_return(double(number: 10))
 
-      expect { planner.run }.to output(/Plan issue already exists/).to_stdout
+      expect { planner.run }.to output(/Closing existing plan issue #5/).to_stdout
     end
   end
 end

@@ -28,9 +28,8 @@ module ClaudeGardener
     def run
       existing = @issue_manager.find_plan_issue
       if existing
-        puts "Plan issue already exists: ##{existing.number}. Skipping."
-        write_output("skipped", "true")
-        return
+        puts "Closing existing plan issue ##{existing.number}"
+        @issue_manager.close_aggregate_issue(existing.number)
       end
 
       categories = @config.enabled_categories
