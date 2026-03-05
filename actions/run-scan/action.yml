@@ -72,6 +72,25 @@ runs:
           Bash(wc:count lines)
           Bash(ls:list files)
 
+    - name: Extract Claude output
+      id: extract
+      shell: bash
+      run: |
+        EXECUTION_FILE="${{ steps.claude.outputs.execution_file }}"
+        if [ ! -f "$EXECUTION_FILE" ]; then
+          echo "Error: Claude execution file not found: $EXECUTION_FILE"
+          exit 1
+        fi
+        RESULT=$(ruby -rjson -e "puts JSON.parse(File.read('$EXECUTION_FILE'))['result']")
+        if [ -z "$RESULT" ]; then
+          echo "Error: No result in Claude execution output"
+          exit 1
+        fi
+        EOF_DELIM="EOF_$(date +%s)"
+        echo "result<<${EOF_DELIM}" >> $GITHUB_OUTPUT
+        echo "$RESULT" >> $GITHUB_OUTPUT
+        echo "${EOF_DELIM}" >> $GITHUB_OUTPUT
+
     - name: Process scan results
       id: post-scan
       shell: bash
@@ -80,5 +99,5 @@ runs:
         CONFIG_PATH: ${{ inputs.config_path }}
         CATEGORY: ${{ inputs.category }}
         PLAN_ISSUE: ${{ inputs.plan_issue }}
-        CLAUDE_OUTPUT: ${{ steps.claude.outputs.result }}
+        CLAUDE_OUTPUT: ${{ steps.extract.outputs.result }}
       run: ruby -e "require_relative '${{ github.action_path }}/../../lib/scanner'; ClaudeGardener::Scanner.post_scan"

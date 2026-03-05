@@ -104,12 +104,11 @@ RSpec.describe ClaudeGardener::Scanner do
       )
     end
 
-    it "skips when Claude output is empty" do
+    it "aborts when Claude output is empty" do
       allow(ENV).to receive(:fetch).with("CLAUDE_OUTPUT", "").and_return("")
 
-      output = capture_stdout { scanner.post_scan }
-
-      expect(output).to include("No scan output")
+      expect { scanner.post_scan }.to raise_error(SystemExit)
+        .and output(/No scan output/).to_stderr
     end
 
     it "skips when no checklist items found" do

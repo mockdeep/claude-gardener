@@ -42,6 +42,12 @@ module ClaudeGardener
 
         Do not analyze files matching these patterns:
         #{excluded}
+
+        ## Important
+
+        Your final response MUST contain the markdown checklist as plain text.
+        Do NOT use todo tools or any other mechanism to track items.
+        The checklist in your response text is what will be parsed and used.
       PROMPT
 
       write_output("prompt", full_prompt)
@@ -52,14 +58,12 @@ module ClaudeGardener
       claude_output = ENV.fetch("CLAUDE_OUTPUT", "")
 
       if claude_output.strip.empty?
-        puts "No scan output from Claude. Skipping."
-        write_output("skipped", "true")
-        return
+        abort "Error: No scan output from Claude."
       end
 
       items = ChecklistParser.parse(claude_output)
       if items.empty?
-        puts "No checklist items found in scan output. Skipping."
+        puts "No checklist items found in scan output. Nothing to do."
         write_output("skipped", "true")
         return
       end
