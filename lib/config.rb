@@ -35,7 +35,8 @@ module ClaudeGardener
       ]
     }.freeze
 
-    attr_reader :version, :workers, :priorities, :guardrails, :labels, :excluded_paths, :categories
+    attr_reader :version, :workers, :priorities, :guardrails, :labels, :excluded_paths, :categories,
+                :pr_assignees, :pr_reviewers
 
     def initialize(config_hash)
       @version = config_hash.fetch("version", 1)
@@ -88,12 +89,16 @@ module ClaudeGardener
       @labels = Labels.new(merged["labels"])
       @excluded_paths = merged["excluded_paths"]
       @categories = enabled_priorities.map(&:category)
+      @pr_assignees = merged.fetch("pr_assignees", [])
+      @pr_reviewers = merged.fetch("pr_reviewers", [])
     end
 
     def init_v2(config_hash)
       @categories = config_hash.fetch("categories", DEFAULT_CATEGORIES)
       @workers = Workers.new("max_concurrent" => config_hash.fetch("max_concurrent", 5))
       @excluded_paths = config_hash.fetch("excluded_paths", ["vendor/**", "node_modules/**"])
+      @pr_assignees = config_hash.fetch("pr_assignees", [])
+      @pr_reviewers = config_hash.fetch("pr_reviewers", [])
 
       # Provide v1-compatible accessors with sensible defaults
       @priorities = @categories.map do |cat|

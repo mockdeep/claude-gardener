@@ -20,6 +20,8 @@ module ClaudeGardener
       @amend = ENV.fetch("AMEND", "false") == "true"
       @aggregate_issue = ENV.fetch("AGGREGATE_ISSUE", nil)
       @item_text = ENV.fetch("ITEM_TEXT", nil)
+      @pr_assignees = ENV.fetch("PR_ASSIGNEES", "").split(",").map(&:strip).reject(&:empty?)
+      @pr_reviewers = ENV.fetch("PR_REVIEWERS", "").split(",").map(&:strip).reject(&:empty?)
     end
 
     def run
@@ -106,12 +108,11 @@ module ClaudeGardener
 
       body = build_pr_body
 
-      output, = Open3.capture2(
-        "gh", "pr", "create",
-        "--title", title,
-        "--body", body,
-        "--head", branch_name
-      )
+      args = ["gh", "pr", "create", "--title", title, "--body", body, "--head", branch_name]
+      @pr_assignees.each { |user| args += ["--assignee", user] }
+      @pr_reviewers.each { |user| args += ["--reviewer", user] }
+
+      output, = Open3.capture2(*args)
 
       # Parse PR URL from output
       pr_url = output.strip

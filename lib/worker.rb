@@ -63,6 +63,8 @@ module ClaudeGardener
       write_output("aggregate_issue", issue_number.to_s)
       write_output("item_index", item_index.to_s)
       write_output("item_text", item_text)
+      write_output("pr_assignees", @config.pr_assignees.join(","))
+      write_output("pr_reviewers", @config.pr_reviewers.join(","))
     end
 
     private

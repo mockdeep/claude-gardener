@@ -137,6 +137,46 @@ RSpec.describe ClaudeGardener::Config do
     end
   end
 
+  describe "#pr_assignees" do
+    it "defaults to empty array for v1" do
+      config = described_class.new({})
+
+      expect(config.pr_assignees).to eq([])
+    end
+
+    it "reads pr_assignees for v1" do
+      config = described_class.new("pr_assignees" => ["alice", "bob"])
+
+      expect(config.pr_assignees).to eq(["alice", "bob"])
+    end
+
+    it "defaults to empty array for v2" do
+      config = described_class.new("version" => 2)
+
+      expect(config.pr_assignees).to eq([])
+    end
+
+    it "reads pr_assignees for v2" do
+      config = described_class.new("version" => 2, "pr_assignees" => ["alice"])
+
+      expect(config.pr_assignees).to eq(["alice"])
+    end
+  end
+
+  describe "#pr_reviewers" do
+    it "defaults to empty array for v1" do
+      config = described_class.new({})
+
+      expect(config.pr_reviewers).to eq([])
+    end
+
+    it "reads pr_reviewers for v2" do
+      config = described_class.new("version" => 2, "pr_reviewers" => ["alice"])
+
+      expect(config.pr_reviewers).to eq(["alice"])
+    end
+  end
+
   describe ClaudeGardener::Config::Labels do
     describe "#for_category" do
       it "returns base label and category label when categories enabled" do

@@ -87,4 +87,6 @@ runs:
         BASE_LABEL: claude-gardener
         AGGREGATE_ISSUE: ${{ steps.prepare.outputs.aggregate_issue }}
         ITEM_TEXT: ${{ steps.prepare.outputs.item_text }}
+        PR_ASSIGNEES: ${{ steps.prepare.outputs.pr_assignees }}
+        PR_REVIEWERS: ${{ steps.prepare.outputs.pr_reviewers }}
       run: ruby ${{ github.action_path }}/../../lib/create_pr.rb

@@ -11,3 +11,9 @@ excluded_paths:
   - "node_modules/**"
   - ".github/**"
   - "*.lock"
+
+pr_assignees:
+  - mockdeep
+
+pr_reviewers:
+  - mockdeep

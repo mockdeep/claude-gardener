@@ -14,6 +14,12 @@ categories:
   - code_improvements
   # - add_tooling
 
+# GitHub users to assign and request review from on each PR (optional)
+# pr_assignees:
+#   - your-github-username
+# pr_reviewers:
+#   - your-github-username
+
 # Paths to exclude from modifications
 excluded_paths:
   - "vendor/**"
