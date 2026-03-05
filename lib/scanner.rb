@@ -109,14 +109,40 @@ module ClaudeGardener
       end
     end
 
-    def check_off_plan_item
-      body = @issue_manager.get_issue_body(@plan_issue.to_i)
-      items = ChecklistParser.parse(body)
-      item = items.find { |i| i.text.strip == @category }
-      return unless item
+    def check_off_plan_item(max_retries: 3)
+      plan_issue_number = @plan_issue.to_i
 
-      updated = ChecklistParser.check_item(body, line_index: item.index)
-      @issue_manager.update_issue_body(@plan_issue.to_i, updated)
+      max_retries.times do |attempt|
+        body = @issue_manager.get_issue_body(plan_issue_number)
+        items = ChecklistParser.parse(body)
+        item = items.find { |i| i.text.strip == @category }
+        return unless item
+        return if item.checked
+
+        updated = ChecklistParser.check_item(body, line_index: item.index)
+        @issue_manager.update_issue_body(plan_issue_number, updated)
+
+        # Re-read to confirm our edit was saved
+        saved_body = @issue_manager.get_issue_body(plan_issue_number)
+        saved_item = ChecklistParser.parse(saved_body).find { |i| i.text.strip == @category }
+
+        if saved_item&.checked
+          close_plan_if_complete(plan_issue_number, saved_body)
+          return
+        end
+
+        puts "Plan item check-off was overwritten, retrying (attempt #{attempt + 1}/#{max_retries})"
+        sleep(1)
+      end
+
+      puts "Warning: Failed to check off plan item after #{max_retries} attempts"
+    end
+
+    def close_plan_if_complete(plan_issue_number, body)
+      return unless ChecklistParser.parse(body).all?(&:checked)
+
+      @issue_manager.close_aggregate_issue(plan_issue_number)
+      puts "All scan categories complete. Closed plan issue ##{plan_issue_number}"
     end
   end
 end

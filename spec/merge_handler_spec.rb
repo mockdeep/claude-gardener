@@ -27,18 +27,44 @@ RSpec.describe ClaudeGardener::MergeHandler do
         .with(state: "open", labels: ["claude-gardener"])
         .and_return([])
 
-      issue_body = "- [ ] Task A (claimed by PR #42)\n- [ ] Task B\n"
-      allow(issue_manager).to receive(:get_issue_body).with(10).and_return(issue_body)
+      allow(issue_manager).to receive(:get_issue_body).with(10).and_return(
+        "- [ ] Task A (claimed by PR #42)\n- [ ] Task B\n",
+        "- [x] Task A (merged in PR #42)\n- [ ] Task B\n"
+      )
       allow(issue_manager).to receive(:update_issue_body)
 
       output = capture_stdout { handler.run }
 
       expect(output).to include("Checked off item in issue #10")
+      expect(output).not_to include("Closed issue")
       expect(output).to include("skipped=false")
       expect(issue_manager).to have_received(:update_issue_body).with(
         10,
         a_string_including("- [x] Task A")
       )
+    end
+
+    it "closes the aggregate issue when all items are complete" do
+      pr = double(
+        body: "aggregate_issue: 10\ncategory: test_coverage",
+        labels: [double(name: "claude-gardener")]
+      )
+      allow(github).to receive(:pull_request).with(42).and_return(pr)
+      allow(github).to receive(:pull_requests)
+        .with(state: "open", labels: ["claude-gardener"])
+        .and_return([])
+
+      allow(issue_manager).to receive(:get_issue_body).with(10).and_return(
+        "- [x] Task A\n- [ ] Task B (claimed by PR #42)\n",
+        "- [x] Task A\n- [x] Task B (merged in PR #42)\n"
+      )
+      allow(issue_manager).to receive(:update_issue_body)
+      allow(issue_manager).to receive(:close_aggregate_issue)
+
+      output = capture_stdout { handler.run }
+
+      expect(output).to include("All items complete. Closed issue #10")
+      expect(issue_manager).to have_received(:close_aggregate_issue).with(10)
     end
 
     it "skips non-gardener PRs" do

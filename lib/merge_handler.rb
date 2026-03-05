@@ -65,6 +65,13 @@ module ClaudeGardener
         note: "merged in PR ##{@pr_number}"
       )
       puts "Checked off item in issue ##{aggregate_issue}"
+
+      # Close the aggregate issue if all items are complete
+      updated_body = @issue_manager.get_issue_body(aggregate_issue)
+      if ChecklistParser.parse(updated_body).all?(&:checked)
+        @issue_manager.close_aggregate_issue(aggregate_issue)
+        puts "All items complete. Closed issue ##{aggregate_issue}"
+      end
     end
 
     def extract_aggregate_issue(body)

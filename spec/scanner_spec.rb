@@ -86,15 +86,16 @@ RSpec.describe ClaudeGardener::Scanner do
 
     it "checks off the plan issue item when plan_issue is set" do
       allow(ENV).to receive(:fetch).with("PLAN_ISSUE", nil).and_return("5")
-      # Re-create scanner to pick up new env
       scanner_with_plan = described_class.new
 
       allow(issue_manager).to receive(:find_aggregate_issues).and_return([])
       allow(issue_manager).to receive(:create_aggregate_issue).and_return(double(number: 20))
       allow(issue_manager).to receive(:get_issue_body).with(5).and_return(
-        "- [ ] test_coverage\n- [ ] security_fixes\n"
+        "- [ ] test_coverage\n- [ ] security_fixes\n",
+        "- [x] test_coverage\n- [ ] security_fixes\n"
       )
       allow(issue_manager).to receive(:update_issue_body)
+      allow(issue_manager).to receive(:close_aggregate_issue)
 
       capture_stdout { scanner_with_plan.post_scan }
 
@@ -102,6 +103,49 @@ RSpec.describe ClaudeGardener::Scanner do
         5,
         a_string_including("- [x] test_coverage")
       )
+      expect(issue_manager).not_to have_received(:close_aggregate_issue).with(5)
+    end
+
+    it "closes the plan issue when all categories are complete" do
+      allow(ENV).to receive(:fetch).with("PLAN_ISSUE", nil).and_return("5")
+      scanner_with_plan = described_class.new
+
+      allow(issue_manager).to receive(:find_aggregate_issues).and_return([])
+      allow(issue_manager).to receive(:create_aggregate_issue).and_return(double(number: 20))
+      allow(issue_manager).to receive(:get_issue_body).with(5).and_return(
+        "- [ ] test_coverage\n- [x] security_fixes\n",
+        "- [x] test_coverage\n- [x] security_fixes\n"
+      )
+      allow(issue_manager).to receive(:update_issue_body)
+      allow(issue_manager).to receive(:close_aggregate_issue)
+
+      capture_stdout { scanner_with_plan.post_scan }
+
+      expect(issue_manager).to have_received(:close_aggregate_issue).with(5)
+    end
+
+    it "retries when plan item check-off is overwritten" do
+      allow(ENV).to receive(:fetch).with("PLAN_ISSUE", nil).and_return("5")
+      scanner_with_plan = described_class.new
+
+      allow(issue_manager).to receive(:find_aggregate_issues).and_return([])
+      allow(issue_manager).to receive(:create_aggregate_issue).and_return(double(number: 20))
+      allow(issue_manager).to receive(:get_issue_body).with(5).and_return(
+        "- [ ] test_coverage\n- [ ] security_fixes\n",  # first read
+        "- [ ] test_coverage\n- [ ] security_fixes\n",  # confirm: overwritten!
+        "- [ ] test_coverage\n- [x] security_fixes\n",  # second read (retry)
+        "- [x] test_coverage\n- [x] security_fixes\n"   # confirm: saved
+      )
+      allow(issue_manager).to receive(:update_issue_body)
+      allow(issue_manager).to receive(:close_aggregate_issue)
+      allow(scanner_with_plan).to receive(:sleep)
+
+      capture_stdout { scanner_with_plan.post_scan }
+
+      expect(issue_manager).to have_received(:update_issue_body).with(
+        5, a_string_including("- [x] test_coverage")
+      ).twice
+      expect(issue_manager).to have_received(:close_aggregate_issue).with(5)
     end
 
     it "aborts when Claude output is empty" do
