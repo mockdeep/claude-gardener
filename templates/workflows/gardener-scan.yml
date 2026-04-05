@@ -48,7 +48,7 @@ jobs:
         uses: mockdeep/claude-gardener/actions/run-scan@main
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_oauth_token: ${{ secrets.CLAUDE_OAUTH_TOKEN }}
           config_path: claude-gardener.yml
           category: ${{ matrix.category }}
           plan_issue: ${{ needs.plan.outputs.plan_issue }}

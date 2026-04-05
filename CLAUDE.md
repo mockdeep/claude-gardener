@@ -216,8 +216,8 @@ And enable in repo settings:
 
 ## Authentication Options
 
-1. **API Key** (`anthropic_api_key`) - Pay-per-use API credits
-2. **OAuth Token** (`claude_oauth_token`) - For Max/Pro subscribers
+1. **OAuth Token** (`claude_oauth_token`) - For Max/Pro subscribers
+2. **API Key** (`anthropic_api_key`) - Pay-per-use API credits
 
 Get OAuth token: `claude auth token`
 

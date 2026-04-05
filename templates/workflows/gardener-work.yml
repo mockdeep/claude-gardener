@@ -49,5 +49,5 @@ jobs:
         uses: mockdeep/claude-gardener/actions/work@main
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_oauth_token: ${{ secrets.CLAUDE_OAUTH_TOKEN }}
           task: ${{ toJson(matrix.task) }}

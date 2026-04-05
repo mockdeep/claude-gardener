@@ -25,7 +25,7 @@ jobs:
         uses: mockdeep/claude-gardener/actions/review-handler@main
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_oauth_token: ${{ secrets.CLAUDE_OAUTH_TOKEN }}
           pr_number: ${{ github.event.pull_request.number }}
 
   build-handler:
@@ -52,7 +52,7 @@ jobs:
         uses: mockdeep/claude-gardener/actions/build-handler@main
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_oauth_token: ${{ secrets.CLAUDE_OAUTH_TOKEN }}
           pr_number: ${{ steps.pr.outputs.number }}
 
   merge-handler:

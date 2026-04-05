@@ -61,7 +61,7 @@ jobs:
         uses: mockdeep/claude-gardener/actions/run-scan@main
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_oauth_token: ${{ secrets.CLAUDE_OAUTH_TOKEN }}
           category: ${{ matrix.category }}
           plan_issue: ${{ needs.plan.outputs.plan_issue }}
 ```
@@ -111,19 +111,13 @@ jobs:
         uses: mockdeep/claude-gardener/actions/work@main
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_oauth_token: ${{ secrets.CLAUDE_OAUTH_TOKEN }}
           task: ${{ toJson(matrix.task) }}
 ```
 
 ### 2. Add authentication
 
-**Option A: API Key (pay-per-use)**
-
-```bash
-gh secret set ANTHROPIC_API_KEY
-```
-
-**Option B: OAuth Token (for Max/Pro subscribers)**
+**Option A: OAuth Token (for Max/Pro subscribers)**
 
 ```bash
 # Get your token
@@ -133,7 +127,13 @@ claude auth token
 gh secret set CLAUDE_OAUTH_TOKEN
 ```
 
-Then use `claude_oauth_token` instead of `anthropic_api_key` in the workflows.
+**Option B: API Key (pay-per-use)**
+
+```bash
+gh secret set ANTHROPIC_API_KEY
+```
+
+Then use `anthropic_api_key` instead of `claude_oauth_token` in the workflows.
 
 ### 3. Enable PR creation
 
