@@ -4,7 +4,7 @@ source "https://rubygems.org"
 
 ruby ">= 3.2"
 
-gem "octokit", "~> 9.0"
+gem "octokit", "~> 10.0"
 gem "faraday-retry", "~> 2.2"
 
 group :development, :test do
