@@ -41,7 +41,39 @@ module Garden
       end
     end
 
+    # Creates a new branch at ref, checked out in a new worktree at dir.
+    def add_worktree(dir, branch, ref)
+      git!("worktree", "prune")
+      FileUtils.mkdir_p(File.dirname(dir))
+      git!("worktree", "add", "--quiet", "-b", branch, dir, ref)
+    end
+
+    # Whether dir has uncommitted changes, ignoring the paths in exclude.
+    def changes?(dir, exclude: [])
+      !@shell.run!("git", "-C", dir, "status", "--porcelain", "--", *pathspec(dir, exclude)).out.strip.empty?
+    end
+
+    # Commits everything in dir except the paths in exclude.
+    def commit_all(dir, message, exclude: [])
+      @shell.run!("git", "-C", dir, "add", "--all", "--", *pathspec(dir, exclude))
+      @shell.run!("git", "-C", dir, "commit", "--quiet", "--file", "-", stdin: message)
+    end
+
+    # The text of git's commit.template, if one is set.
+    def commit_template
+      result = git("config", "--path", "commit.template")
+      path = result.out.strip
+      File.read(path) if result.success? && File.file?(path)
+    end
+
     private
+
+    # Everything, minus the excluded paths. Paths git already ignores are
+    # skipped, since git refuses an exclude that names an ignored file.
+    def pathspec(dir, exclude)
+      exclude = exclude.reject { |path| @shell.run("git", "-C", dir, "check-ignore", "--quiet", path).success? }
+      ["."] + exclude.map { |path| ":(exclude)#{path}" }
+    end
 
     def remote?(name)
       git("remote").out.split.include?(name)

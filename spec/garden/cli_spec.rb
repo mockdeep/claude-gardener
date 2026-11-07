@@ -100,6 +100,72 @@ RSpec.describe Garden::CLI do
     end
   end
 
+  describe "fix" do
+    let(:fix_step) { instance_double(Garden::FixStep) }
+    let(:finding) { Garden::Finding.build(title: "XSS", severity: "high").with(branch: "garden/security/x") }
+
+    before do
+      allow(Garden::FixStep).to receive(:new).and_return(fix_step)
+      garden("add", make_git_repo("my-app"))
+    end
+
+    it "reports each fix as it starts and ends" do
+      failed = Garden::Finding.build(title: "CSRF")
+      allow(fix_step).to receive(:call) do |&block|
+        block.call(finding, nil)
+        block.call(finding, Garden::Fixer::Outcome.new(status: "pending_review", note: "Done", log: nil))
+        block.call(failed, nil)
+        block.call(failed, Garden::Fixer::Outcome.new(status: "failed", note: "Tests fail.\nMore", log: nil))
+        [finding, failed]
+      end
+
+      expect(garden("fix")).to eq(0)
+      expect(out.string).to eq(<<~TEXT)
+        Added my-app (#{sandbox}/projects/my-app)
+        == my-app
+        Fixing [high] XSS
+          Ready for review on garden/security/x
+        Fixing [medium] CSRF
+          Failed: Tests fail.
+      TEXT
+    end
+
+    it "says when there's nothing to fix" do
+      allow(fix_step).to receive(:call).and_return([])
+
+      garden("fix", "my-app")
+
+      expect(out.string).to include("Nothing to fix.")
+    end
+  end
+
+  describe "with no command" do
+    let(:scan_step) { instance_double(Garden::ScanStep) }
+    let(:fix_step) { instance_double(Garden::FixStep, call: []) }
+
+    before do
+      allow(Garden::ScanStep).to receive(:new).and_return(scan_step)
+      allow(Garden::FixStep).to receive(:new).and_return(fix_step)
+      garden("add", make_git_repo("my-app"))
+    end
+
+    it "scans, then fixes" do
+      allow(scan_step).to receive(:call).and_return(:scanned)
+
+      expect(garden).to eq(0)
+      expect(scan_step).to have_received(:call).with(force: false).ordered
+      expect(fix_step).to have_received(:call).ordered
+    end
+
+    it "still fixes saved findings when the scan fails, but exits with 1" do
+      allow(scan_step).to receive(:call).and_raise(Garden::Error, "Claude failed")
+
+      expect(garden).to eq(1)
+      expect(fix_step).to have_received(:call)
+      expect(err.string).to include("my-app: Claude failed")
+    end
+  end
+
   it "runs setup" do
     expect(garden("setup")).to eq(0)
     expect(out.string).to include("Linked garden-review")

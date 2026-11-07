@@ -32,6 +32,11 @@ module Garden
       File.join(state_dir, "reviews")
     end
 
+    # Test output saved when a fix's tests fail, one per finding.
+    def logs_dir
+      File.join(state_dir, "logs")
+    end
+
     def worktrees_dir
       File.join(data_dir, "worktrees")
     end

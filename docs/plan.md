@@ -31,6 +31,10 @@ projects:
     fix_limit: 3                 # optional, default 2
     model: sonnet                # optional, default is Claude's own default
     audit_commands: [composer audit]   # optional, added to the built-in list
+    test_commands: [bundle exec rspec] # optional, guessed if not set
+    worktree_files: [.env]             # optional, linked into fix worktrees
+    setup_commands: [npm ci]           # optional, run in fix worktrees
+    fix_timeout: 1800                  # optional, seconds per Claude run
 ```
 
 ### `garden scan [project] [--force]`
@@ -60,16 +64,41 @@ For each registered project, one at a time:
    - each finding has a title, details, files, and a severity (`high`,
      `medium`, `low`); at most 10 per scan
    - if the scan fails, keep the old findings, show the error, and move on
-3. Fix up to 2 open findings, highest severity first (the limit can be changed
-   per project in `projects.yml`). Each fix:
-   - gets its own branch and git worktree, so your main checkout is never
-     touched. Worktrees live at
-     `~/.local/share/garden/worktrees/<project>/<branch>/`, outside Dropbox
-     and out of the project folders
-   - runs Claude headless (`claude -p`) with the work prompt plus the general
-     and repo-specific guidance
-   - ends with a commit on that branch
-4. Record each new branch as pending review.
+3. **Fix.** First fetch (even if no scan ran), and mark any finding left in
+   `fixing` by a crashed run as `failed`. Then fix up to `fix_limit` open
+   findings, highest severity first. For each one:
+   - mark it `fixing` and create branch `garden/security/<id>-<short-title>`
+     from the latest default branch, in a worktree at
+     `~/.local/share/garden/worktrees/<project>/garden-security-<id>/`
+     (outside Dropbox and out of the project folders)
+   - link `worktree_files` from the main checkout and run `setup_commands`
+     (garden runs these itself, so Claude doesn't need permission for them)
+   - run `claude -p` in `acceptEdits` mode, so it can edit files and use basic
+     file commands in the worktree, plus the `test_commands` and read-only git
+     commands. Nothing else is allowed. The prompt has the finding, the
+     guidance, and the git commit template if one is set. Time limit:
+     `fix_timeout` (default 30 minutes)
+   - Claude returns `fixed`, `not_an_issue` or `failed`, plus a summary and a
+     commit message
+   - garden runs the `test_commands` itself. If they fail, it resumes Claude's
+     session once with the output; if they still fail, the finding is marked
+     `failed` and the log is saved to `~/.local/state/garden/logs/<id>.log`
+   - garden (not Claude) commits and marks it `pending_review`. If Claude says
+     `not_an_issue` or `failed`, or there are no changes, it's marked `failed`
+     with a note, so it lands in the review queue
+
+`test_commands` is guessed when it isn't set: `Gemfile` means
+`bundle exec rspec` (or `bundle exec rake test` without a `spec/` folder);
+`package.json` means `npm test`; `pyproject.toml` means `pytest`;
+`Cargo.toml` means `cargo test`; `go.mod` means `go test ./...`.
+
+Tests run against your real local setup (database and other services). The
+worktree shares the main checkout's test database, which is fine as long as
+you aren't running tests yourself while garden runs.
+
+### `garden fix [project]`
+
+Runs only the fix part, without scanning.
 
 ### `garden review`
 
@@ -120,6 +149,9 @@ findings:
     branch: garden/security/a1b2c3-sql-injection
     worktree: /home/me/.local/share/garden/worktrees/my-app/garden-security-a1b2c3
     pr_url: null
+    severity: high
+    note: null                # from the fix, e.g. "Claude thinks it's not an issue"
+    log: null                 # path to a saved test log, when tests failed
     reason: null              # set on reject, from the review summary
     rejected_at: null
 ```

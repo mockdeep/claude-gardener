@@ -9,8 +9,8 @@ RSpec.describe Garden::Claude do
       attr_reader :calls
       attr_accessor :response
 
-      def run(*cmd, chdir: nil, stdin: nil)
-        (@calls ||= []) << { cmd: cmd, chdir: chdir, stdin: stdin }
+      def run(*cmd, chdir: nil, stdin: nil, timeout: nil)
+        (@calls ||= []) << { cmd: cmd, chdir: chdir, stdin: stdin, timeout: timeout }
         response
       end
     end.new
@@ -57,7 +57,34 @@ RSpec.describe Garden::Claude do
 
     run
 
-    expect(shell.calls.first[:cmd]).not_to include("--allowed-tools", "--model")
+    expect(shell.calls.first[:cmd]).not_to include("--allowed-tools", "--model", "--resume")
+    expect(shell.calls.first[:cmd]).to include("--no-session-persistence")
+  end
+
+  it "saves the session when asked, and returns its id" do
+    respond({ "structured_output" => { "a" => 1 }, "session_id" => "abc" }.to_json)
+
+    response = described_class.new(shell: shell).run(
+      prompt: "Fix", dir: "/code", schema: schema, tools: ["Edit"], persist: true,
+      permission_mode: "acceptEdits", timeout: 60
+    )
+
+    expect(response).to eq(Garden::Claude::Response.new(data: { "a" => 1 }, session_id: "abc"))
+    call = shell.calls.first
+    expect(call[:cmd]).not_to include("--no-session-persistence")
+    expect(call[:cmd][call[:cmd].index("--permission-mode") + 1]).to eq("acceptEdits")
+    expect(call[:timeout]).to eq(60)
+  end
+
+  it "resumes a session" do
+    respond({ "structured_output" => {} }.to_json)
+
+    described_class.new(shell: shell).run(prompt: "Again", dir: "/code", schema: schema, tools: [],
+                                          resume: "abc")
+
+    cmd = shell.calls.first[:cmd]
+    expect(cmd[cmd.index("--resume") + 1]).to eq("abc")
+    expect(cmd).not_to include("--no-session-persistence")
   end
 
   it "raises with Claude's message when it reports an error" do
