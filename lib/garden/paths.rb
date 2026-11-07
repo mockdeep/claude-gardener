@@ -22,6 +22,11 @@ module Garden
       File.join(config_dir, "projects.yml")
     end
 
+    # Summaries written by the garden-review skill, one per finding.
+    def reviews_dir
+      File.join(state_dir, "reviews")
+    end
+
     def worktrees_dir
       File.join(data_dir, "worktrees")
     end
