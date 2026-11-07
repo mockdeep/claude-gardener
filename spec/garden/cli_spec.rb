@@ -166,6 +166,47 @@ RSpec.describe Garden::CLI do
     end
   end
 
+  describe "context" do
+    let(:path) { make_git_repo("my-app") }
+
+    before do
+      Garden::Shell.run!("git", "-C", path, "checkout", "-q", "-b", "main")
+      Garden::Shell.run!("git", "-C", path, "commit", "-q", "--allow-empty", "-m", "Start")
+      garden("add", path)
+    end
+
+    def save(finding)
+      Garden::StateStore.new("my-app").update { |s| s.record_scan([finding]) }
+    end
+
+    it "writes the context, makes the guidance worktree and prints the command" do
+      save(Garden::Finding.build(title: "XSS").with(id: "abc123", status: "pending_review",
+                                                    worktree: "/wt/fix"))
+
+      expect(garden("context", "abc123")).to eq(0)
+
+      context_file = File.join(Garden::Paths.reviews_dir, "abc123", "context.md")
+      guidance = File.join(Garden::Paths.worktrees_dir, "my-app", "guidance")
+      expect(File).to exist(context_file)
+      expect(File).to exist(guidance)
+      expect(out.string).to include(
+        "cd /wt/fix && claude /garden-review\\ #{context_file} --add-dir #{Garden::Paths.guidance_dir} #{guidance}"
+      )
+    end
+
+    it "refuses findings that aren't waiting for review" do
+      save(Garden::Finding.build(title: "XSS").with(id: "abc123"))
+
+      expect(garden("context", "abc123")).to eq(1)
+      expect(err.string).to include("Finding abc123 is open")
+    end
+
+    it "says when no finding has that id" do
+      expect(garden("context", "nope")).to eq(1)
+      expect(err.string).to include("No finding with id nope")
+    end
+  end
+
   it "runs setup" do
     expect(garden("setup")).to eq(0)
     expect(out.string).to include("Linked garden-review")

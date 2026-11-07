@@ -48,6 +48,21 @@ module Garden
       git!("worktree", "add", "--quiet", "-b", branch, dir, ref)
     end
 
+    # Makes sure branch is checked out in a worktree at dir, creating the
+    # branch from ref if it doesn't exist yet. An existing worktree is left
+    # as it is, changes and all.
+    def ensure_worktree(dir, branch, ref)
+      return if File.directory?(dir)
+
+      git!("worktree", "prune")
+      FileUtils.mkdir_p(File.dirname(dir))
+      if git("rev-parse", "--verify", "--quiet", "refs/heads/#{branch}").success?
+        git!("worktree", "add", "--quiet", dir, branch)
+      else
+        git!("worktree", "add", "--quiet", "-b", branch, dir, ref)
+      end
+    end
+
     # Whether dir has uncommitted changes, ignoring the paths in exclude.
     def changes?(dir, exclude: [])
       !@shell.run!("git", "-C", dir, "status", "--porcelain", "--", *pathspec(dir, exclude)).out.strip.empty?
