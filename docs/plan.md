@@ -228,12 +228,15 @@ findings:
 
 ## Removed
 
-All GitHub Actions code: `action.yml`, `actions/`, `templates/workflows/`, and
-the GitHub-specific Ruby (issue manager, PR manager, review/build/merge
-handlers, task claimer, legacy task selection). `AGENTS.md` and the README will
-be rewritten to match.
+All GitHub Actions code: `action.yml`, `actions/`, `templates/`, the
+`.github/workflows/` files (including the `@claude` bot), the example
+`claude-gardener.yml`, `NOTES.md`, and the GitHub-specific Ruby (issue
+manager, PR manager, review/build/merge handlers, task claimer, legacy task
+selection) with its specs and gems (`octokit`, `faraday-retry`, `webmock`).
 
 ## Build order
+
+All done:
 
 1. Gem skeleton with the `garden` executable, `garden setup`, and `garden add`.
 2. State storage.
@@ -242,3 +245,30 @@ be rewritten to match.
 5. `garden-review` skill, including the propose-then-write guidance edits.
 6. `garden review` queue with approve/reject/skip.
 7. Remove the GitHub Actions code and update the docs.
+
+## Future ideas
+
+From the original notes, not planned yet:
+
+- **More categories** beyond security: missing tooling (coverage, linters),
+  unit and end-to-end tests, linter fixes, open issues, architecture.
+- **Scheduling**: run `garden` from cron or a systemd timer, so the review
+  queue is ready when you sit down.
+- **Running projects in parallel**, since each has its own state file.
+- **Other sources of work**: GitHub issues, Honeybadger errors, Trello cards.
+- **Starter skills** that garden can copy into a project.
+- **Isolation** (dev containers, Incus) so fixes could run with fewer
+  permission limits.
+- **PR settings** such as reviewers and assignees.
+
+References from the original notes:
+
+- Gas Town: https://github.com/steveyegge/gastown
+- Beads: https://github.com/steveyegge/beads
+- Claude agent teams: https://code.claude.com/docs/en/agent-teams
+- Repository knowledge as the system of record:
+  https://openai.com/index/harness-engineering/#we-made-repository-knowledge-the-system-of-record
+- code-on-incus: https://github.com/mensfeld/code-on-incus
+- Dev containers: https://github.com/devcontainers/
+- tmx-claude, tmx-worktree:
+  https://gist.github.com/andynu/294bf3c468fdada439eb8c2eee71c9c4

@@ -1,208 +1,112 @@
 # Claude Gardener
 
-A GitHub Action that enables Claude to continuously make small improvements to your codebase. Claude Gardener scans for improvements, creates work items, and opens PRs automatically.
+A command-line tool that runs Claude Code over your local projects to find
+and fix small problems, one reviewable branch at a time. You review each fix
+with Claude, and lessons from those reviews are saved as guidance, so later
+fixes get better.
 
-## How It Works
+It currently looks for **security issues**.
 
-1. **Scan**: Analyzes your codebase per category (test coverage, security, etc.) and creates GitHub issues with checklists of improvements
-2. **Work**: Picks items from those checklists, makes focused changes, and creates PRs
-3. **Handle**: Responds to PR reviews, fixes build failures, and cleans up after merge
+## How it works
 
-## Quick Start
+1. **`garden`** goes through each registered project. It scans for security
+   issues (at most once a week), then fixes the most severe ones, each on its
+   own branch in its own git worktree. Your normal checkout is never touched.
+2. **`garden review`** goes through the fixes one by one. For each, it opens
+   an interactive Claude session to talk the fix through. Then you approve it
+   (garden opens a PR), reject it, retry it, or skip it.
+3. When you push back on a fix during review, Claude suggests a lesson and
+   saves it once you agree. General lessons go in `~/.config/garden/guidance/`;
+   repo-specific ones go on a `garden/guidance` branch with its own PR.
 
-### 1. Create the workflows
+## Requirements
 
-You need three workflow files. Copy them from the [templates](templates/workflows/) directory:
+- Ruby 3.2 or newer
+- git
+- [Claude Code](https://code.claude.com), logged in (`claude` on your PATH)
+- [GitHub CLI](https://cli.github.com) (`gh`), logged in, for opening PRs
 
-**`.github/workflows/gardener-scan.yml`** - Scans for improvements:
-
-```yaml
-name: Gardener Scan
-
-on:
-  workflow_dispatch: {}
-  # schedule:
-  #   - cron: '0 6 * * 1'  # Every Monday at 6am
-
-permissions:
-  contents: read
-  issues: write
-  id-token: write
-
-jobs:
-  plan:
-    runs-on: ubuntu-latest
-    outputs:
-      categories: ${{ steps.plan.outputs.categories }}
-      plan_issue: ${{ steps.plan.outputs.plan_issue }}
-      skipped: ${{ steps.plan.outputs.skipped }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Create scan plan
-        id: plan
-        uses: mockdeep/claude-gardener/actions/plan-scan@main
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-  scan:
-    needs: plan
-    if: needs.plan.outputs.skipped != 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        category: ${{ fromJson(needs.plan.outputs.categories) }}
-      max-parallel: 2
-      fail-fast: false
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run scan
-        uses: mockdeep/claude-gardener/actions/run-scan@main
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          claude_oauth_token: ${{ secrets.CLAUDE_OAUTH_TOKEN }}
-          category: ${{ matrix.category }}
-          plan_issue: ${{ needs.plan.outputs.plan_issue }}
-```
-
-**`.github/workflows/gardener-work.yml`** - Executes improvements:
-
-```yaml
-name: Gardener Work
-
-on:
-  workflow_dispatch: {}
-
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-  id-token: write
-
-jobs:
-  setup:
-    runs-on: ubuntu-latest
-    outputs:
-      tasks: ${{ steps.setup.outputs.tasks }}
-      skipped: ${{ steps.setup.outputs.skipped }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Select work items
-        id: setup
-        uses: mockdeep/claude-gardener/actions/setup-work@main
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-  work:
-    needs: setup
-    if: needs.setup.outputs.skipped != 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        task: ${{ fromJson(needs.setup.outputs.tasks) }}
-      max-parallel: 3
-      fail-fast: false
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Execute work item
-        uses: mockdeep/claude-gardener/actions/work@main
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          claude_oauth_token: ${{ secrets.CLAUDE_OAUTH_TOKEN }}
-          task: ${{ toJson(matrix.task) }}
-```
-
-### 2. Add authentication
-
-**Option A: OAuth Token (for Max/Pro subscribers)**
+## Setup
 
 ```bash
-# Get your token
-claude auth token
+git clone https://github.com/mockdeep/claude-gardener.git
+cd claude-gardener
+bundle install
+ln -s "$PWD/exe/garden" ~/.local/bin/garden   # or anywhere on your PATH
 
-# Add as secret
-gh secret set CLAUDE_OAUTH_TOKEN
+garden setup        # links the garden-review skill into ~/.claude/skills
 ```
 
-**Option B: API Key (pay-per-use)**
+Then register each project you want garden to work on:
 
 ```bash
-gh secret set ANTHROPIC_API_KEY
+cd ~/code/my-app
+garden add
 ```
 
-Then use `anthropic_api_key` instead of `claude_oauth_token` in the workflows.
+## Commands
 
-### 3. Enable PR creation
+| Command | What it does |
+|---------|--------------|
+| `garden` | Scan every project (if due), then fix open findings |
+| `garden scan [project] [--force]` | Only scan; `--force` rescans even if the last scan is recent |
+| `garden fix [project]` | Only fix, without scanning |
+| `garden review` | Review fixes with Claude, then approve, reject, retry or skip each |
+| `garden add [path] [--name NAME]` | Register a project |
+| `garden setup` | Link the review skill into Claude Code |
 
-Go to **Settings -> Actions -> General -> Workflow permissions** and check:
-- "Allow GitHub Actions to create and approve pull requests"
+## Configuration
 
-### 4. Add configuration (optional)
-
-Create `claude-gardener.yml` in your repository root:
+Projects live in `~/.config/garden/projects.yml`, which you can edit by hand:
 
 ```yaml
-version: 2
-
-max_concurrent: 3
-
-categories:
-  - test_coverage
-  - code_improvements
-
-excluded_paths:
-  - "vendor/**"
-  - "node_modules/**"
+defaults:                           # optional, applies to every project
+  model: opus
+projects:
+  - name: my-app
+    path: /home/me/code/my-app
+    fix_limit: 2                    # fixes per run, most severe first
+    model: sonnet                   # Claude model; default is Claude's own
+    test_commands: [bundle exec rspec]   # guessed from the project if unset
+    setup_commands: [npm ci]        # run in each fix worktree before Claude
+    worktree_files: [.env]          # ignored files linked into fix worktrees
+    audit_commands: [composer audit]     # extra audit tools the scan may run
+    fix_timeout: 1800               # seconds per Claude run
 ```
 
-### 5. Run it
+### What Claude may run
 
-1. Go to **Actions -> Gardener Scan -> Run workflow** to scan for improvements
-2. Review the created issues to see what was found
-3. Go to **Actions -> Gardener Work -> Run workflow** to execute improvements
-4. Review the PRs that are created
+- **Scanning:** read-only file tools, plus audit commands (`bundle audit`,
+  `npm audit`, `yarn audit`, `pnpm audit`, `pip-audit`, `cargo audit`, and
+  any `audit_commands`).
+- **Fixing:** edits and basic file commands in the fix worktree, the
+  `test_commands`, and read-only git commands. Nothing else. Garden runs
+  `setup_commands` itself, and garden (not Claude) makes the commit.
 
-## Task Categories
+Tests run against your real local setup, so a database or other services
+need to be running. Fix worktrees share your main checkout's test database.
 
-| Category | Description |
-|----------|-------------|
-| `test_coverage` | Adds tests for code with missing coverage |
-| `security_fixes` | Fixes security vulnerabilities (OWASP Top 10, secrets, etc.) |
-| `linter_fixes` | Fixes linter violations systematically |
-| `code_improvements` | Small improvements to readability and maintainability |
-| `add_tooling` | Adds development tooling (linters, test frameworks, etc.) |
+## Where garden keeps things
 
-## Configuration Reference
+| Path | Contents |
+|------|----------|
+| `~/.config/garden/projects.yml` | Registered projects and settings |
+| `~/.config/garden/guidance/` | General lessons from reviews |
+| `~/.local/state/garden/<project>.yml` | Findings and their status |
+| `~/.local/state/garden/reviews/`, `logs/` | Review context and summaries, failed test logs |
+| `~/.local/share/garden/worktrees/` | Scan, fix and guidance worktrees |
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `version` | 1 | Config schema version (use `2` for simplified format) |
-| `max_concurrent` | 5 (v2) / 3 (v1) | Maximum simultaneous gardener PRs |
-| `categories` | All built-in | List of categories to scan and work on |
-| `excluded_paths` | [] | Glob patterns to exclude from scanning |
-| `pr_assignees` | [] | GitHub usernames to assign to each PR |
-| `pr_reviewers` | [] | GitHub usernames to request review from on each PR |
+These follow `XDG_CONFIG_HOME`, `XDG_STATE_HOME` and `XDG_DATA_HOME` when set.
 
-## How Coordination Works
+## Development
 
-- **Scan plan issues** track which categories have been scanned
-- **Aggregate issues** contain checklists of work items per category
-- Work items are **claimed** by PRs to prevent duplicate work
-- Items are **checked off** when PRs merge
-- Aggregate issues **auto-close** when all items are complete
-- Re-running a scan closes old issues and creates fresh ones
+```bash
+bundle install
+bundle exec rspec
+```
 
-## Troubleshooting
-
-| Error | Solution |
-|-------|----------|
-| "Credit balance too low" | Add API credits or use OAuth token |
-| "Resource not accessible by integration" | Add required permissions to workflow |
-| "id-token: write" error | Add `id-token: write` to permissions |
-| "Not permitted to create PRs" | Enable in Settings -> Actions -> General |
+See [AGENTS.md](AGENTS.md) for how the code fits together, and
+[docs/plan.md](docs/plan.md) for the design.
 
 ## License
 

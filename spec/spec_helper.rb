@@ -1,10 +1,6 @@
 # frozen_string_literal: true
 
-require "webmock/rspec"
-require "json"
-
-# Load all lib files
-Dir[File.join(__dir__, "../lib/**/*.rb")].each { |f| require f }
+require_relative "../lib/garden"
 
 RSpec.configure do |config|
   config.expect_with :rspec do |expectations|
@@ -21,25 +17,4 @@ RSpec.configure do |config|
   config.warnings = true
   config.order = :random
   Kernel.srand config.seed
-
-  config.before(:each) do
-    WebMock.disable_net_connect!
-  end
-end
-
-def fixture_path(name)
-  File.join(__dir__, "fixtures", name)
-end
-
-def load_fixture(name)
-  File.read(fixture_path(name))
-end
-
-def stub_github_api(path, response:, method: :get, status: 200)
-  stub_request(method, "https://api.github.com#{path}")
-    .to_return(
-      status: status,
-      body: response.to_json,
-      headers: { "Content-Type" => "application/json" }
-    )
 end
