@@ -123,6 +123,26 @@ RSpec.describe Garden::Repo do
       expect(git(worktree, "status", "--porcelain")).to eq("?? local.yml")
     end
 
+    it "creates a guidance worktree, reusing the branch if it already exists" do
+      repo.ensure_worktree(worktree, "garden/guidance", "main")
+      expect(git(worktree, "branch", "--show-current")).to eq("garden/guidance")
+      commit(worktree, "AGENTS.md", "lesson")
+
+      git(path, "worktree", "remove", worktree)
+      repo.ensure_worktree(worktree, "garden/guidance", "main")
+
+      expect(File.read(File.join(worktree, "AGENTS.md"))).to eq("lesson")
+    end
+
+    it "leaves an existing worktree and its changes alone" do
+      repo.ensure_worktree(worktree, "garden/guidance", "main")
+      File.write(File.join(worktree, "AGENTS.md"), "draft")
+
+      repo.ensure_worktree(worktree, "garden/guidance", "main")
+
+      expect(File.read(File.join(worktree, "AGENTS.md"))).to eq("draft")
+    end
+
     it "reads the commit template when one is set" do
       template = File.join(sandbox, "msg")
       File.write(template, "# Subject\n")

@@ -104,13 +104,16 @@ Runs only the fix part, without scanning.
 
 Goes through pending branches across all projects as a queue:
 
-1. Starts `claude "/garden-review <summary-file>"` in the branch's worktree,
-   with `--add-dir ~/.config/garden` so the central guidance can be edited.
-   The summary file is `~/.local/state/garden/reviews/<id>.md`.
-2. You talk through the approach with Claude.
-3. The skill proposes guidance edits and waits for your OK before writing them.
-4. At the end, the skill writes a short summary of the discussion to the
-   summary file, including why you'd reject it, if you lean that way.
+1. Writes a context file for the finding to
+   `~/.local/state/garden/reviews/<id>/context.md` (the finding, Claude's
+   note, the end of any test log, the branch, the default branch, and where
+   guidance goes).
+2. Makes sure the project's guidance worktree exists (see below).
+3. Starts `claude "/garden-review <context-file>"` in the fix worktree, with
+   `--add-dir` for `~/.config/garden`, the guidance worktree, and the review
+   folder.
+4. You and Claude review the fix (see the skill below). At the end, the skill
+   writes `summary.md` next to the context file.
 5. After Claude exits, `garden` asks for a decision:
    - **Approve**: open your editor on the commit message
      (`git commit --amend`), then push and run `gh pr create`, using the
@@ -118,18 +121,43 @@ Goes through pending branches across all projects as a queue:
    - **Reject**: save the summary as the reason, then delete the branch and
      worktree
    - **Skip**: leave it in the queue
+6. Asks "Next? (y/n)" before moving on.
+7. When the session ends, for each project whose guidance worktree has
+   changes: commit them (opening your editor for the message), push, and
+   open a PR, or add to the one already open.
 
 Failed findings are reviewed the same way, using whatever partial changes are
 in the worktree. Their choices are **approve** (only if there's now a commit),
-**retry** (set back to `open`), **reject**, or **skip**.
-6. Asks "Next? (y/n)" before moving on.
+**retry** (delete the branch and worktree and set back to `open`), **reject**,
+or **skip**.
+
+### The `garden-review` skill
+
+1. **Overview.** Reads the context file and the diff
+   (`git diff <default>...HEAD`), then gives a short rundown: the issue, what
+   changed, whether the tests passed, and anything that looks off. For a
+   failed finding, it explains what went wrong instead.
+2. **Discussion.** You talk it through. If you want the fix changed, Claude
+   edits the code, runs the tests, and folds the changes into the fix commit
+   (`git commit --amend --no-edit`). A failed finding with no commit yet gets
+   a new commit.
+3. **Lessons.** Only when you clearly push back on the approach, the skill
+   suggests a lesson, says whether it's general or repo-specific, shows the
+   exact edit, and waits for your OK. You can redirect it.
+4. **Wrap-up.** Writes `summary.md`: what was discussed, lessons saved, and a
+   suggested decision (approve, reject, retry or skip) with the reason.
 
 ## Guidance (learned from reviews)
 
-- **General**: `~/.config/garden/guidance/`, for broad philosophy that applies
-  to every project.
-- **Repo-specific**: the repo's own `AGENTS.md`/`CLAUDE.md` or
-  `.claude/skills/`, for patterns specific to that codebase.
+- **General**: `~/.config/garden/guidance/<topic>.md`, for broad philosophy
+  that applies to every project.
+- **Repo-specific**: the repo's `AGENTS.md` if it has one, otherwise
+  `CLAUDE.md`; a skill in `.claude/skills/` only for a narrow, step-by-step
+  procedure. These edits are made on a separate `garden/guidance` branch, in
+  its own worktree at `~/.local/share/garden/worktrees/<project>/guidance`,
+  so they don't get mixed into fix PRs and aren't lost when a fix is
+  rejected. The skill only edits; garden commits and opens the PR at the end
+  of a review session.
 
 Both levels are loaded into the prompt when `garden` works on a project.
 
@@ -145,11 +173,11 @@ findings:
     title: SQL injection in user search
     details: Search param is put straight into the query...
     files: [app/models/user.rb]
+    severity: high
     status: pending_review
     branch: garden/security/a1b2c3-sql-injection
     worktree: /home/me/.local/share/garden/worktrees/my-app/garden-security-a1b2c3
     pr_url: null
-    severity: high
     note: null                # from the fix, e.g. "Claude thinks it's not an issue"
     log: null                 # path to a saved test log, when tests failed
     reason: null              # set on reject, from the review summary
