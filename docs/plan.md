@@ -20,17 +20,48 @@ away.
 ### `garden add [path]`
 
 Registers a project (defaults to the current directory). Projects are saved to
-`~/.config/garden/projects.yml`, which can also be edited by hand.
+`~/.config/garden/projects.yml`, which can also be edited by hand:
+
+```yaml
+defaults:            # optional, applies to every project
+  model: opus
+projects:
+  - name: my-app
+    path: /home/me/code/my-app
+    fix_limit: 3                 # optional, default 2
+    model: sonnet                # optional, default is Claude's own default
+    audit_commands: [composer audit]   # optional, added to the built-in list
+```
+
+### `garden scan [project] [--force]`
+
+Runs only the scan part of `garden` (below) for one project, or all of them,
+and prints each finding's severity, title and files. `--force` rescans even if
+the saved findings are less than a week old.
 
 ### `garden`
 
-For each registered project:
+For each registered project, one at a time:
 
-1. Load saved security findings. If there are none, or they are older than a
-   week, run a fresh scan.
-2. Skip findings that already have a pending branch or open PR.
-3. Fix up to 2 findings (default; can be changed per project in
-   `projects.yml`). Each fix:
+1. **Tidy up state.** Remove approved findings whose PR is merged or closed
+   (checked with `gh`), and rejections older than a week.
+2. **Scan if needed.** If the saved findings are more than a week old (or
+   there are none):
+   - `git fetch`, then reset a scan worktree
+     (`~/.local/share/garden/worktrees/<project>/scan`) to the latest default
+     branch (from `origin/HEAD`, falling back to `main`/`master`)
+   - run `claude -p` there with structured output (`--json-schema`), read-only
+     file tools, and a short allowed list of audit commands (`bundle audit`,
+     `npm audit`, `yarn audit`, `pnpm audit`, `pip-audit`, `cargo audit`,
+     plus any extras set in `projects.yml`)
+   - the prompt is the security scan prompt, plus every `.md` file in
+     `~/.config/garden/guidance/`, plus in-progress and recently rejected
+     findings (with reasons) so Claude doesn't report them again
+   - each finding has a title, details, files, and a severity (`high`,
+     `medium`, `low`); at most 10 per scan
+   - if the scan fails, keep the old findings, show the error, and move on
+3. Fix up to 2 open findings, highest severity first (the limit can be changed
+   per project in `projects.yml`). Each fix:
    - gets its own branch and git worktree, so your main checkout is never
      touched. Worktrees live at
      `~/.local/share/garden/worktrees/<project>/<branch>/`, outside Dropbox

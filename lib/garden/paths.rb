@@ -22,6 +22,11 @@ module Garden
       File.join(config_dir, "projects.yml")
     end
 
+    # Lessons from past reviews that apply to every project.
+    def guidance_dir
+      File.join(config_dir, "guidance")
+    end
+
     # Summaries written by the garden-review skill, one per finding.
     def reviews_dir
       File.join(state_dir, "reviews")

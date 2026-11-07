@@ -41,6 +41,13 @@ module Garden
     end
 
     def open_findings = findings.select { |f| f.status == "open" }
+
+    # Open findings, most severe first, otherwise in the order found.
+    def fix_queue
+      open_findings.each_with_index
+                   .sort_by { |f, i| [Finding::SEVERITIES.index(f.severity), i] }
+                   .map(&:first)
+    end
     def in_progress = findings.select(&:in_progress?)
     def review_queue = findings.select(&:reviewable?)
     def rejections = findings.select { |f| f.status == "rejected" }

@@ -37,6 +37,16 @@ RSpec.describe Garden::State do
     end
   end
 
+  it "orders open findings by severity, then by the order found" do
+    low = finding("open", severity: "low")
+    high = finding("open", severity: "high")
+    medium1 = finding("open", severity: "medium")
+    medium2 = finding("open", severity: "medium")
+    state = described_class.new(findings: [low, medium1, finding("pending_review", severity: "high"), high, medium2])
+
+    expect(state.fix_queue).to eq([high, medium1, medium2, low])
+  end
+
   it "groups findings for the review queue and in-progress list" do
     pending = finding("pending_review")
     failed = finding("failed")
@@ -92,6 +102,17 @@ RSpec.describe Garden::Finding do
     finding = described_class.build(title: "XSS")
 
     expect { finding.with(status: "done") }.to raise_error(Garden::Error, /Unknown finding status/)
+  end
+
+  it "rejects unknown severities" do
+    expect { described_class.build(title: "XSS", severity: "urgent") }
+      .to raise_error(Garden::Error, /Unknown severity/)
+  end
+
+  it "defaults to medium severity when reading a finding without one" do
+    finding = described_class.from_h("id" => "abc123", "title" => "XSS", "status" => "open")
+
+    expect(finding.severity).to eq("medium")
   end
 end
 
