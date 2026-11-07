@@ -1,0 +1,7 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# realpath so this still works when linked into a folder on PATH.
+require_relative File.join(File.dirname(File.realpath(__FILE__)), "../lib/garden")
+
+exit Garden::CLI.new(ARGV).run
