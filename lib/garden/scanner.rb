@@ -34,7 +34,7 @@ module Garden
     def initialize(project, claude: Claude.new, guidance_dir: Paths.guidance_dir)
       @project = project
       @claude = claude
-      @guidance_dir = guidance_dir
+      @guidance = Guidance.new(guidance_dir)
     end
 
     # Scans the code in dir. state supplies the findings not to report again.
@@ -50,7 +50,7 @@ module Garden
     end
 
     def prompt(state)
-      [File.read(PROMPT_FILE), guidance, known(state)].compact.join("\n")
+      [File.read(PROMPT_FILE), @guidance.section, known(state)].compact.join("\n")
     end
 
     # Each command allowed bare or with arguments.
@@ -59,14 +59,6 @@ module Garden
     end
 
     private
-
-    def guidance
-      files = Dir[File.join(@guidance_dir, "*.md")]
-      return if files.empty?
-
-      sections = files.map { |f| "### #{File.basename(f, '.md')}\n\n#{File.read(f).strip}\n" }
-      "## Guidance\n\nFollow this guidance from past reviews.\n\n#{sections.join("\n")}"
-    end
 
     def known(state)
       lines = state.in_progress.map { |f| "- (in progress) #{describe(f)}" }

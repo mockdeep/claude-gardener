@@ -8,11 +8,16 @@ RSpec.shared_context "garden sandbox" do
   around do |example|
     Dir.mktmpdir("garden-spec") do |dir|
       @sandbox = File.realpath(dir)
+      # Own git settings, so the user's (like a commit template) don't leak in.
+      gitconfig = File.join(@sandbox, "gitconfig")
+      File.write(gitconfig, "[user]\n\tname = Test\n\temail = test@example.com\n")
       vars = {
         "XDG_CONFIG_HOME" => File.join(@sandbox, "config"),
         "XDG_STATE_HOME" => File.join(@sandbox, "state"),
         "XDG_DATA_HOME" => File.join(@sandbox, "data"),
-        "CLAUDE_CONFIG_DIR" => File.join(@sandbox, "claude")
+        "CLAUDE_CONFIG_DIR" => File.join(@sandbox, "claude"),
+        "GIT_CONFIG_GLOBAL" => gitconfig,
+        "GIT_CONFIG_NOSYSTEM" => "1"
       }
       old = vars.keys.to_h { |k| [k, ENV.fetch(k, nil)] }
       vars.each { |k, v| ENV[k] = v }

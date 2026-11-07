@@ -86,6 +86,58 @@ RSpec.describe Garden::Repo do
     expect(File).to exist(File.join(worktree, "b.txt"))
   end
 
+  describe "fix worktrees" do
+    let(:path) do
+      path = File.join(sandbox, "local")
+      FileUtils.mkdir_p(path)
+      git(path, "init", "-q", "-b", "main")
+      commit(path, "a.txt", "one")
+      path
+    end
+    let(:repo) { described_class.new(path) }
+    let(:worktree) { File.join(sandbox, "worktrees", "fix") }
+
+    it "creates a new branch in a new worktree" do
+      repo.add_worktree(worktree, "garden/security/x", "main")
+
+      expect(git(worktree, "branch", "--show-current")).to eq("garden/security/x")
+    end
+
+    it "reports changes, ignoring excluded paths" do
+      repo.add_worktree(worktree, "garden/security/x", "main")
+      expect(repo.changes?(worktree)).to be(false)
+
+      File.write(File.join(worktree, "local.yml"), "x")
+      expect(repo.changes?(worktree)).to be(true)
+      expect(repo.changes?(worktree, exclude: ["local.yml"])).to be(false)
+    end
+
+    it "commits everything except excluded paths" do
+      repo.add_worktree(worktree, "garden/security/x", "main")
+      File.write(File.join(worktree, "a.txt"), "two")
+      File.write(File.join(worktree, "local.yml"), "x")
+      repo.commit_all(worktree, "Fix it\n\nBody", exclude: ["local.yml"])
+
+      expect(git(worktree, "log", "-1", "--format=%B")).to eq("Fix it\n\nBody")
+      expect(git(worktree, "show", "--name-only", "--format=")).to eq("a.txt")
+      expect(git(worktree, "status", "--porcelain")).to eq("?? local.yml")
+    end
+
+    it "reads the commit template when one is set" do
+      template = File.join(sandbox, "msg")
+      File.write(template, "# Subject\n")
+      git(path, "config", "commit.template", template)
+
+      expect(repo.commit_template).to eq("# Subject\n")
+    end
+
+    it "returns nil when there's no commit template" do
+      git(path, "config", "commit.template", File.join(sandbox, "missing"))
+
+      expect(repo.commit_template).to be_nil
+    end
+  end
+
   it "recreates a worktree whose folder was deleted" do
     _, clone = cloned_project
     repo = described_class.new(clone)

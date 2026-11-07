@@ -6,7 +6,8 @@ require "time"
 module Garden
   # One issue found by a scan, and where it's got to.
   class Finding < Data.define(
-    :id, :title, :details, :files, :severity, :status, :branch, :worktree, :pr_url, :reason, :rejected_at
+    :id, :title, :details, :files, :severity, :status, :branch, :worktree, :note, :log, :pr_url,
+    :reason, :rejected_at
   )
     # Most severe first.
     SEVERITIES = %w[high medium low].freeze
@@ -32,7 +33,7 @@ module Garden
     end
 
     def initialize(id:, title:, status:, details: nil, files: [], severity: "medium", branch: nil,
-                   worktree: nil, pr_url: nil, reason: nil, rejected_at: nil)
+                   worktree: nil, note: nil, log: nil, pr_url: nil, reason: nil, rejected_at: nil)
       raise Error, "Unknown finding status '#{status}'" unless STATUSES.include?(status)
       raise Error, "Unknown severity '#{severity}'" unless SEVERITIES.include?(severity)
 

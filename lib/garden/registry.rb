@@ -17,9 +17,19 @@ module Garden
   #       audit_commands: [composer audit]  # optional, added to the built-in list
   class Registry
     DEFAULT_FIX_LIMIT = 2
-    SETTINGS = %w[fix_limit model audit_commands].freeze
+    DEFAULT_FIX_TIMEOUT = 30 * 60
+    LIST_SETTINGS = %w[audit_commands test_commands worktree_files setup_commands].freeze
+    SETTINGS = (%w[fix_limit model fix_timeout] + LIST_SETTINGS).freeze
 
-    Project = Data.define(:name, :path, :fix_limit, :model, :audit_commands)
+    # test_commands is nil when not set, so it can be guessed.
+    Project = Data.define(:name, :path, :fix_limit, :model, :audit_commands, :test_commands,
+                          :worktree_files, :setup_commands, :fix_timeout) do
+      def initialize(name:, path:, fix_limit: DEFAULT_FIX_LIMIT, model: nil, audit_commands: [],
+                     test_commands: nil, worktree_files: [], setup_commands: [],
+                     fix_timeout: DEFAULT_FIX_TIMEOUT)
+        super
+      end
+    end
 
     def initialize(file = Paths.projects_file)
       @file = file
@@ -28,14 +38,10 @@ module Garden
     def projects
       defaults = data.fetch("defaults", nil) || {}
       entries.map do |entry|
-        settings = defaults.slice(*SETTINGS).merge(entry.slice(*SETTINGS))
-        Project.new(
-          name: entry.fetch("name"),
-          path: entry.fetch("path"),
-          fix_limit: settings.fetch("fix_limit", DEFAULT_FIX_LIMIT),
-          model: settings["model"],
-          audit_commands: Array(settings["audit_commands"])
-        )
+        settings = defaults.slice(*SETTINGS).merge(entry.slice(*SETTINGS)).compact
+        settings = settings.to_h { |k, v| [k, LIST_SETTINGS.include?(k) ? Array(v) : v] }
+        Project.new(name: entry.fetch("name"), path: entry.fetch("path"),
+                    **settings.transform_keys(&:to_sym))
       end
     end
 

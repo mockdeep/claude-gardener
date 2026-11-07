@@ -85,7 +85,26 @@ RSpec.describe Garden::Registry do
           path: /code/my-app
     YAML
 
-    expect(registry.projects.first).to have_attributes(fix_limit: 2, model: nil, audit_commands: [])
+    expect(registry.projects.first).to have_attributes(
+      fix_limit: 2, model: nil, audit_commands: [], test_commands: nil, worktree_files: [],
+      setup_commands: [], fix_timeout: 1800
+    )
+  end
+
+  it "reads the fix settings, accepting a single command as a list" do
+    write_projects(<<~YAML)
+      projects:
+        - name: my-app
+          path: /code/my-app
+          test_commands: bin/test
+          worktree_files: [.env]
+          setup_commands: [npm ci]
+          fix_timeout: 600
+    YAML
+
+    expect(registry.projects.first).to have_attributes(
+      test_commands: ["bin/test"], worktree_files: [".env"], setup_commands: ["npm ci"], fix_timeout: 600
+    )
   end
 
   it "reads per-project settings, which win over the defaults section" do
