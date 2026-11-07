@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "optparse"
-require "shellwords"
 
 module Garden
   class CLI
@@ -17,8 +16,8 @@ module Garden
         scan [project]     Scan for security issues (all projects if none given)
                              --force  rescan even if the last scan is recent
         fix [project]      Fix open findings without scanning
-        context <id>       Prepare a finding for review and print the command
-                           to start reviewing it
+        review             Review fixes one by one with Claude, then approve
+                           (open a PR), reject, retry or skip each
         help             Show this message
     TEXT
 
@@ -36,7 +35,7 @@ module Garden
       when "add" then add
       when "scan" then scan
       when "fix" then fix
-      when "context" then context
+      when "review" then review
       when "help", "-h", "--help" then help
       when nil then scan_and_fix
       else unknown(command)
@@ -153,35 +152,9 @@ module Garden
       false
     end
 
-    # Until `garden review` exists: prepares one review and prints how to
-    # start it.
-    def context
-      id = @argv.first or raise Error, "Usage: garden context <finding-id>"
-      project, finding = find_finding(id)
-      unless finding.reviewable?
-        raise Error, "Finding #{id} is #{finding.status}; only pending_review and failed findings can be reviewed."
-      end
-
-      repo = Repo.new(project.path)
-      ref = repo.default_ref
-      review = ReviewContext.new(project, finding, default_ref: ref)
-      repo.ensure_worktree(review.guidance_worktree, ReviewContext::GUIDANCE_BRANCH, ref)
-      path = review.write
-
-      # The prompt goes first: --add-dir takes a list and would swallow it.
-      command = ["claude", "/garden-review #{path}", "--add-dir", *review.extra_dirs]
-      @out.puts "Wrote #{path}"
-      @out.puts "To review, run:"
-      @out.puts "  cd #{Shellwords.escape(finding.worktree)} && #{Shellwords.join(command)}"
+    def review
+      ReviewQueue.new(terminal: Terminal.new(out: @out)).call
       0
-    end
-
-    def find_finding(id)
-      Registry.new.projects.each do |project|
-        finding = StateStore.new(project.name).read.findings.find { |f| f.id == id }
-        return [project, finding] if finding
-      end
-      raise Error, "No finding with id #{id} in any project."
     end
 
     def help

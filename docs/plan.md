@@ -102,34 +102,45 @@ Runs only the fix part, without scanning.
 
 ### `garden review`
 
-Goes through pending branches across all projects as a queue:
+Goes through every `pending_review` and `failed` finding across all projects
+as one queue, highest severity first:
 
 1. Writes a context file for the finding to
    `~/.local/state/garden/reviews/<id>/context.md` (the finding, Claude's
    note, the end of any test log, the branch, the default branch, and where
    guidance goes).
-2. Makes sure the project's guidance worktree exists (see below).
+2. Makes sure the project's guidance worktree exists (see below). If the
+   `garden/guidance` branch has no open PR and no uncommitted changes, it's
+   reset to the latest default branch first, so merged lessons don't pile up.
 3. Starts `claude "/garden-review <context-file>"` in the fix worktree, with
-   `--add-dir` for `~/.config/garden`, the guidance worktree, and the review
-   folder.
+   `--add-dir` for the general guidance folder, the guidance worktree, and
+   the review folder.
 4. You and Claude review the fix (see the skill below). At the end, the skill
    writes `summary.md` next to the context file.
-5. After Claude exits, `garden` asks for a decision:
-   - **Approve**: open your editor on the commit message
-     (`git commit --amend`), then push and run `gh pr create`, using the
-     summary in the PR description
-   - **Reject**: save the summary as the reason, then delete the branch and
-     worktree
+5. After Claude exits, `garden` shows the suggested decision and asks:
+   approve / reject / retry / skip. Pressing Enter takes the suggestion
+   (`skip` if there's no summary).
+   - **Approve**: fetch and rebase onto the latest default branch (on a
+     conflict, cancel the rebase and keep the finding in the queue), open
+     your editor on the commit message (`git commit --amend`), push to
+     `origin`, open a ready-for-review PR with `gh pr create --fill` (title
+     and description come from the commit), save the PR link, and remove the
+     worktree. The branch stays.
+   - **Reject**: save the summary's reason (empty if there's no summary),
+     then delete the worktree and branch
+   - **Retry**: delete the worktree and branch and set the finding back to
+     `open`
    - **Skip**: leave it in the queue
-6. Asks "Next? (y/n)" before moving on.
-7. When the session ends, for each project whose guidance worktree has
-   changes: commit them (opening your editor for the message), push, and
-   open a PR, or add to the one already open.
+   If a step fails (for example the push is refused, or `gh` isn't set up),
+   show the error and leave the finding as it was.
+6. Asks "Next? (y/n)" before moving on. "n" ends the queue.
+7. When the queue ends (but not after Ctrl-C), for each project whose
+   guidance worktree has changes: commit them (opening your editor for the
+   message), push `garden/guidance`, and open a PR with
+   `gh pr create --fill-first`, or just push if one is already open.
 
 Failed findings are reviewed the same way, using whatever partial changes are
-in the worktree. Their choices are **approve** (only if there's now a commit),
-**retry** (delete the branch and worktree and set back to `open`), **reject**,
-or **skip**.
+in the worktree. Approve is only possible if the branch now has a commit.
 
 ### The `garden-review` skill
 
