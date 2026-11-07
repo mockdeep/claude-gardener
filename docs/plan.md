@@ -44,16 +44,25 @@ For each registered project:
 
 Goes through pending branches across all projects as a queue:
 
-1. Starts `claude "/garden-review"` in the branch's worktree, with
-   `--add-dir ~/.config/garden` so the central guidance can be edited.
+1. Starts `claude "/garden-review <summary-file>"` in the branch's worktree,
+   with `--add-dir ~/.config/garden` so the central guidance can be edited.
+   The summary file is `~/.local/state/garden/reviews/<id>.md`.
 2. You talk through the approach with Claude.
 3. The skill proposes guidance edits and waits for your OK before writing them.
-4. After Claude exits, `garden` asks for a decision:
+4. At the end, the skill writes a short summary of the discussion to the
+   summary file, including why you'd reject it, if you lean that way.
+5. After Claude exits, `garden` asks for a decision:
    - **Approve**: open your editor on the commit message
-     (`git commit --amend`), then push and run `gh pr create`
-   - **Reject**: delete the branch and worktree
+     (`git commit --amend`), then push and run `gh pr create`, using the
+     summary in the PR description
+   - **Reject**: save the summary as the reason, then delete the branch and
+     worktree
    - **Skip**: leave it in the queue
-5. Asks "Next? (y/n)" before moving on.
+
+Failed findings are reviewed the same way, using whatever partial changes are
+in the worktree. Their choices are **approve** (only if there's now a commit),
+**retry** (set back to `open`), **reject**, or **skip**.
+6. Asks "Next? (y/n)" before moving on.
 
 ## Guidance (learned from reviews)
 
@@ -69,9 +78,41 @@ Both levels are loaded into the prompt when `garden` works on a project.
 Kept in one YAML file per project at `~/.local/state/garden/<project>.yml`,
 which can be read and edited by hand:
 
-- saved findings and when they were scanned
-- pending branches and their worktree paths
-- review status (pending, approved, rejected)
+```yaml
+scanned_at: "2026-11-06T20:00:00Z"
+findings:
+  - id: a1b2c3                # short random id
+    title: SQL injection in user search
+    details: Search param is put straight into the query...
+    files: [app/models/user.rb]
+    status: pending_review
+    branch: garden/security/a1b2c3-sql-injection
+    worktree: /home/me/.local/share/garden/worktrees/my-app/garden-security-a1b2c3
+    pr_url: null
+    reason: null              # set on reject, from the review summary
+    rejected_at: null
+```
+
+**Statuses**
+
+- `open`: found, not fixed yet
+- `fixing`: a fix is running
+- `pending_review`: fixed, waiting in the review queue
+- `failed`: Claude couldn't fix it; also goes in the review queue
+- `approved`: PR opened
+- `rejected`: turned down in review
+
+**Rules**
+
+- On rescan, `open` findings are replaced by the new results. Anything with a
+  branch or PR is kept.
+- Rejected findings are removed 7 days after `rejected_at`.
+- Approved findings are removed once their PR is merged or closed (checked
+  with `gh` at the start of each run).
+- Scan prompts include recent rejections (with reasons) and in-progress
+  findings, and Claude judges whether a new finding is the same issue.
+- Writes go to a temp file that's then renamed into place, and a lock file
+  stops two `garden` runs editing the same project's state at once.
 
 ## Technical choices
 

@@ -54,6 +54,13 @@ RSpec.describe Garden::Registry do
       .to raise_error(Garden::Error, /already registered/)
   end
 
+  it "rejects names that aren't safe to use in file names" do
+    path = make_git_repo("my-app")
+
+    expect { registry.add(path, name: "../evil") }.to raise_error(Garden::Error, /can only use/)
+    expect { registry.add(path, name: ".hidden") }.to raise_error(Garden::Error, /can only use/)
+  end
+
   it "rejects a folder that isn't a git repo" do
     path = File.join(sandbox, "plain")
     FileUtils.mkdir_p(path)

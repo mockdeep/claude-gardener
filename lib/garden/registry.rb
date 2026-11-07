@@ -38,6 +38,11 @@ module Garden
       return [:exists, existing] if existing
 
       name ||= File.basename(root)
+      # The name is used in file and folder names, so keep it simple.
+      unless name.match?(/\A[\w.-]+\z/) && !name.start_with?(".")
+        raise Error, "Project name '#{name}' can only use letters, numbers, '.', '_' and '-'. " \
+                     "Pick another with --name."
+      end
       if projects.any? { |p| p.name == name }
         raise Error, "A project named '#{name}' is already registered. " \
                      "Pick another with --name."
