@@ -63,9 +63,56 @@ module Garden
       end
     end
 
+    # Rebases dir's branch onto ref. On a conflict, cancels the rebase and
+    # raises, leaving the branch as it was.
+    def rebase(dir, ref)
+      result = @shell.run("git", "-C", dir, "rebase", "--quiet", ref)
+      return if result.success?
+
+      @shell.run("git", "-C", dir, "rebase", "--abort")
+      raise Error, "Rebasing onto #{ref} hit a conflict, so it was cancelled. " \
+                   "Resolve it in #{dir}, or reject or retry the finding."
+    end
+
+    # Pushes dir's branch to origin. Garden owns its branches, so it's safe
+    # to overwrite one that was pushed before a rebase or amend.
+    def push(dir, branch)
+      @shell.run!("git", "-C", dir, "push", "--quiet", "--force-with-lease", "--set-upstream", "origin", branch)
+    end
+
+    # Whether dir's branch has commits that aren't in ref.
+    def commits_since?(dir, ref)
+      @shell.run!("git", "-C", dir, "rev-list", "--count", "#{ref}..HEAD").out.strip.to_i.positive?
+    end
+
+    # Whether dir's branch has commits that aren't on any remote branch.
+    def unpushed_commits?(dir)
+      !@shell.run!("git", "-C", dir, "rev-list", "HEAD", "--not", "--remotes").out.strip.empty?
+    end
+
+    # Moves dir's branch to ref, throwing away its commits and changes.
+    def reset_to(dir, ref)
+      @shell.run!("git", "-C", dir, "reset", "--quiet", "--hard", ref)
+    end
+
+    def remove_worktree(dir)
+      git!("worktree", "remove", "--force", dir) if File.directory?(dir)
+      git!("worktree", "prune")
+    end
+
+    def delete_branch(branch)
+      return unless git("rev-parse", "--verify", "--quiet", "refs/heads/#{branch}").success?
+
+      git!("branch", "--quiet", "-D", branch)
+    end
+
     # Whether dir has uncommitted changes, ignoring the paths in exclude.
     def changes?(dir, exclude: [])
       !@shell.run!("git", "-C", dir, "status", "--porcelain", "--", *pathspec(dir, exclude)).out.strip.empty?
+    end
+
+    def stage_all(dir)
+      @shell.run!("git", "-C", dir, "add", "--all")
     end
 
     # Commits everything in dir except the paths in exclude.
