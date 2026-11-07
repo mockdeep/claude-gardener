@@ -73,15 +73,53 @@ RSpec.describe Garden::Registry do
       .to raise_error(Garden::Error, /No such directory/)
   end
 
-  it "reads fix_limit from the file when set" do
+  def write_projects(yaml)
     FileUtils.mkdir_p(File.dirname(Garden::Paths.projects_file))
-    File.write(Garden::Paths.projects_file, <<~YAML)
+    File.write(Garden::Paths.projects_file, yaml)
+  end
+
+  it "fills in defaults for settings that aren't set" do
+    write_projects(<<~YAML)
+      projects:
+        - name: my-app
+          path: /code/my-app
+    YAML
+
+    expect(registry.projects.first).to have_attributes(fix_limit: 2, model: nil, audit_commands: [])
+  end
+
+  it "reads per-project settings, which win over the defaults section" do
+    write_projects(<<~YAML)
+      defaults:
+        model: opus
+        fix_limit: 4
       projects:
         - name: my-app
           path: /code/my-app
           fix_limit: 5
+          audit_commands: [composer audit]
+        - name: other
+          path: /code/other
+          model: sonnet
     YAML
 
-    expect(registry.projects.first.fix_limit).to eq(5)
+    my_app, other = registry.projects
+    expect(my_app).to have_attributes(fix_limit: 5, model: "opus", audit_commands: ["composer audit"])
+    expect(other).to have_attributes(fix_limit: 4, model: "sonnet")
+  end
+
+  it "keeps the defaults section when adding a project" do
+    write_projects("defaults:\n  model: opus\nprojects: []\n")
+
+    registry.add(make_git_repo("my-app"))
+
+    expect(registry.projects.first.model).to eq("opus")
+  end
+
+  it "finds a project by name" do
+    _, project = registry.add(make_git_repo("my-app"))
+
+    expect(registry.find("my-app")).to eq(project)
+    expect { registry.find("nope") }.to raise_error(Garden::Error, /No project named 'nope'/)
   end
 end
