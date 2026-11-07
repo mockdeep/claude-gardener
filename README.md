@@ -21,7 +21,7 @@ It currently looks for **security issues**.
 
 ## Requirements
 
-- Ruby 3.2 or newer
+- Ruby 3.4 or newer
 - git
 - [Claude Code](https://code.claude.com), logged in (`claude` on your PATH)
 - [GitHub CLI](https://cli.github.com) (`gh`), logged in, for opening PRs
@@ -104,6 +104,9 @@ These follow `XDG_CONFIG_HOME`, `XDG_STATE_HOME` and `XDG_DATA_HOME` when set.
 bundle install
 bundle exec rspec
 ```
+
+GitHub Actions runs the tests on Ruby 3.4 and 4.0 for every pull
+request and push to `main`.
 
 See [AGENTS.md](AGENTS.md) for how the code fits together, and
 [docs/plan.md](docs/plan.md) for the design.
