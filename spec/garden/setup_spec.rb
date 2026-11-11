@@ -27,6 +27,20 @@ RSpec.describe Garden::Setup do
     expect { described_class.new.run }.to raise_error(Garden::Error, /already links to/)
   end
 
+  it "lists skills that aren't installed" do
+    expect(described_class.new.missing).to eq(["garden-review"])
+
+    described_class.new.run
+    expect(described_class.new.missing).to eq([])
+  end
+
+  it "counts a broken link as missing" do
+    FileUtils.mkdir_p(File.dirname(target))
+    File.symlink("/somewhere/else", target)
+
+    expect(described_class.new.missing).to eq(["garden-review"])
+  end
+
   it "won't replace an existing folder" do
     FileUtils.mkdir_p(target)
 

@@ -167,8 +167,15 @@ RSpec.describe Garden::CLI do
   end
 
   it "runs the review queue" do
+    garden("setup")
+
     expect(garden("review")).to eq(0)
     expect(out.string).to include("Nothing to review.")
+  end
+
+  it "won't review until the skill is installed" do
+    expect(garden("review")).to eq(1)
+    expect(err.string).to include("Run `garden setup` first")
   end
 
   it "runs setup" do

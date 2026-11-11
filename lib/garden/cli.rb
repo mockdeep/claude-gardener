@@ -153,6 +153,9 @@ module Garden
     end
 
     def review
+      missing = Setup.new.missing
+      raise Error, "The #{missing.join(', ')} skill isn't installed. Run `garden setup` first." if missing.any?
+
       ReviewQueue.new(terminal: Terminal.new(out: @out)).call
       0
     end
