@@ -20,6 +20,11 @@ module Garden
       SKILLS.map { |skill| [skill, link(skill)] }
     end
 
+    # Skills Claude can't find, including links that point nowhere.
+    def missing
+      SKILLS.reject { |skill| File.exist?(File.join(@target_dir, skill)) }
+    end
+
     private
 
     def link(skill)
